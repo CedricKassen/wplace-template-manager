@@ -45,6 +45,8 @@ export async function renderSquares(
     const img = await createImageBitmap(baseBlob);
     ctx.drawImage(img, 0, 0, 3000, 3000);
 
+    const renderedOverlays = []
+
     for (const overlay of chunkOverlays) {
         const chunkXIndex = overlay.toChunkX - overlay.chunk[0] - (overlay.toChunkX - chunkX);
         const chunkYIndex = overlay.toChunkY - overlay.chunk[1] - (overlay.toChunkY - chunkY);
@@ -76,11 +78,18 @@ export async function renderSquares(
             templateBitmap.width,
             templateBitmap.height,
         );
+
+        renderedOverlays.push(overlay)
     }
 
     const blob = await new Promise<Blob>((resolve) => {
         canvas.toBlob((blob) => resolve(blob!));
     });
+
+    window.postMessage({
+        source: "template-renderer-result",
+        templates: renderedOverlays,
+    })
 
     canvas.remove();
 

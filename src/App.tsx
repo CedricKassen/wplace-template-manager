@@ -12,6 +12,7 @@ import { renderSquares } from "./utils/renderSquares";
 import { useSetAtom, useAtomValue } from "jotai";
 import { overlayAtom } from "./atoms/overlay";
 import { positionAtom } from "./atoms/position";
+import { currentTemplates } from "./atoms/currentTemplates";
 
 const routes = new Map([
     ["/", <Overview />],
@@ -24,9 +25,10 @@ function App() {
     const [showOverlay, setShowOverlay] = useState(false);
     const setPosition = useSetAtom(positionAtom);
     const overlays = useAtomValue(overlayAtom);
+    const setCurrentTemplates = useSetAtom(currentTemplates);
 
     const handleMessage = async (event: MessageEvent) => {
-        const { source, blob, requestId, chunk, position } = event.data;
+        const { source, blob, requestId, chunk, position, templates } = event.data;
 
         if (source === "wplace-tile-request") {
             window.postMessage({
@@ -39,6 +41,10 @@ function App() {
 
         if (source === "wplace-position-request") {
             setPosition({ position, chunk });
+        }
+
+        if (source === "template-renderer-result") {
+            setCurrentTemplates(templates);
         }
     };
 
