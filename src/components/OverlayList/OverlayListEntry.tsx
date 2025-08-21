@@ -24,30 +24,35 @@ export const OverlayListEntry: FC<{
                 <img ref={imgRef} alt={"logo"} style={{ width: "2.5rem" }} />
                 <span> {name} </span>
             </td>
-            <td className={"groupRow"} style={{ flexGrow: 1, justifyContent: "flex-end" }}>
+            <td
+                className={"groupRow coordinates"}
+                style={{ flexGrow: 1, justifyContent: "flex-end" }}
+            >
                 <span className={"btn btn-sm coordinate-display"}> {chunk[0]} </span>
                 <span className={"btn btn-sm coordinate-display"}> {chunk[1]} </span>
                 <span className={"btn btn-sm coordinate-display"}> {position[0]} </span>
                 <span className={"btn btn-sm coordinate-display"}> {position[1]} </span>
             </td>
-            <td onClick={() => navigate("/edit/" + name)}>
-                <Cog className={"icon"} />
-            </td>
-            <td
-                onClick={() => {
-                    window.postMessage({
-                        source: "overlay-location-service",
-                        chunk,
-                        position,
-                    } as JumpEventData);
-                    awaitElement("button[title='Explore']").then((button) => {
-                        button.dispatchEvent(
-                            new Event("click", { bubbles: true, cancelable: true }),
-                        );
-                    });
-                }}
-            >
-                <Location className={"icon"} />
+            <td className={"groupRow"} style={{ gap: "2rem" }}>
+                <button onClick={() => navigate("/edit/" + name)}>
+                    <Cog className={"icon"} />
+                </button>
+                <button
+                    onClick={() => {
+                        window.postMessage({
+                            source: "overlay-location-service",
+                            chunk,
+                            position,
+                        } as JumpEventData);
+                        awaitElement("button[title='Explore']").then((button) => {
+                            button.dispatchEvent(
+                                new Event("click", { bubbles: true, cancelable: true }),
+                            );
+                        });
+                    }}
+                >
+                    <Location className={"icon"} />
+                </button>
             </td>
         </tr>
     );

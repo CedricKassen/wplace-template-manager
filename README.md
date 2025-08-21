@@ -19,7 +19,7 @@ working in groups and on bigger projects with many colors a breeze.
 
 | Feature                         | wplace.live Template Manager | Blue Marble           | WPlace Overlay Pro   |
 |---------------------------------|------------------------------|-----------------------|----------------------|
-| Show Image Template               | ☑️                           | ☑️                    | ☑️                   |
+| Show Image Template             | ☑️                           | ☑️                    | ☑️                   |
 | Fully Hidable UI                | ☑️                           | Partial (Collapsible) | Partial (Collapsible) |
 | Build-In Color Matching         | ☑️                           | ❌                     | ☑️                   |
 | Level and Droplet Overview      | ❌                            | ☑️                    | ❌                    |
@@ -30,18 +30,18 @@ working in groups and on bigger projects with many colors a breeze.
 | Export (with embedded Metadata) | ☑️                           | ❌                     | ❌                    |
 | Template Color Selector         | ☑️                           | ❌                     | ❌                    |
 | Jump to Template Location       | ☑️                           | ❌                     | ❌                    |
+| Explicit Mobile Support         | ☑️                           | ❌                     | ❌                    |
 
 ## Installation
 
 ### Requirements
 
 - Tampermonkey (alternatives are not tested but might work)
-- Chrome / other Chromium-based Browsers (Firefox seems to work but is also untested)
 
 ### Tampermonkey
 
 - Install Tampermonkey from the [Chrome Webstore](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo).
-- Enable "Allow Userscripts" in the [Tampermonkey Chrome Settings](chrome://extensions/?id=dhdgffkkebhmkfjojejmpbldmpobfkfo)
+- **Chrome Only** Enable "Allow Userscripts" in the [Tampermonkey Chrome Settings](chrome://extensions/?id=dhdgffkkebhmkfjojejmpbldmpobfkfo)
 
 ### wplace.live Template Manager
 

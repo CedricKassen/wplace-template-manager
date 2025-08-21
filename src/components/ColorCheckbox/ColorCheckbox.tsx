@@ -1,4 +1,3 @@
-import "./ColorCheckbox.css";
 import { formatString } from "../../utils/formatString";
 import React, { ChangeEvent, FC } from "react";
 import { Color, FreeColor, PaidColor } from "../../colorMap";

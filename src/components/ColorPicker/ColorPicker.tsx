@@ -143,7 +143,7 @@ export const ColorPicker: FC<{
 
     return (
         <>
-            <label className={"input w-full"}>
+            <label className={"input w-full desktop-auto"}>
                 <span className="label">Search</span>
                 <input
                     type={"search"}

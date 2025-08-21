@@ -1,4 +1,4 @@
-import React, { ChangeEvent, FC, useEffect, useMemo, useState } from "react";
+import React, { FC, useEffect, useMemo, useRef, useState } from "react";
 import { Overlay } from "../components/Overlay/Overlay";
 import { useParam } from "../components/Router/useParam";
 import { useAtom } from "jotai";
@@ -9,18 +9,27 @@ import text from "png-chunk-text";
 import encode from "png-chunks-encode";
 import extract from "png-chunks-extract";
 import { Buffer } from "buffer";
-import { positionAtom } from "../atoms/position";
 import { ColorPicker } from "../components/ColorPicker/ColorPicker";
 import { Color } from "../colorMap";
-import { Location } from "../components/Icons/Location";
+import { CoordinateForm } from "../components/FormInputs/CoordinateForm";
+import { ImageUpload } from "../components/FormInputs/ImageUpload";
 
 export const Edit: FC = () => {
-    const [overlays, setOverlay] = useAtom(overlayAtom);
-    const [onlyShowSelectedColors, setOnlyShowSelectedColors] = useState<boolean>(false);
+    const [error, setError] = useState<string>();
+    // Inputs
     const [startChunk, setStartChunk] = useState<number[]>([]);
     const [startPosition, setStartPosition] = useState<number[]>([]);
     const [selectedColors, setSelectedColors] = useState<Color[]>([]);
-    const [position] = useAtom(positionAtom);
+
+    const [image, setImage] = useState<string>();
+    const [imageColors, setImageColors] = useState<Color[]>();
+    const [height, setHeight] = useState<number>(0);
+    const [width, setWidth] = useState<number>(0);
+
+    const [changeName, setChangeName] = useState<string>();
+
+    const [overlays, setOverlay] = useAtom(overlayAtom);
+    const [onlyShowSelectedColors, setOnlyShowSelectedColors] = useState<boolean>(false);
     const name = useParam("name");
     const navigate = useNavigate();
 
@@ -39,6 +48,16 @@ export const Edit: FC = () => {
             setStartPosition(overlays[currentOverlayIndex].coordinate);
         }
     }, []);
+
+    useEffect(() => {
+        const overlay = overlays.find((overlay) => overlay.name === changeName);
+
+        if (overlay?.name) {
+            setError(`An overlay with the name ${overlay.name} already exists`);
+        } else {
+            setError(undefined);
+        }
+    }, [changeName]);
 
     const exportButton = (
         <button
@@ -100,82 +119,76 @@ export const Edit: FC = () => {
                 </div>
             }
         >
-            <h2> Position: </h2>
-            <div className={"row"}>
-                <label className={"input"}>
-                    <span className="label">CX</span>
-                    <input
-                        placeholder={"Chunk"}
-                        type={"number"}
-                        value={startChunk[0]}
-                        onChange={(event) =>
-                            setStartChunk(([x, y]) => [Number(event.target.value), y])
-                        }
-                    />
-                </label>
-                <label className={"input"}>
-                    <span className="label">CY</span>
-                    <input
-                        placeholder={"Chunk"}
-                        type={"number"}
-                        value={startChunk[1]}
-                        onChange={(event) =>
-                            setStartChunk(([x, y]) => [x, Number(event.target.value)])
-                        }
-                    />
-                </label>
-                <label className={"input"}>
-                    <span className="label">PX</span>
-                    <input
-                        placeholder={"Pos."}
-                        type={"number"}
-                        value={startPosition[0]}
-                        onChange={(event) =>
-                            setStartPosition(([x, y]) => [Number(event.target.value), y])
-                        }
-                    />
-                </label>
-                <label className={"input"}>
-                    <span className="label">PY</span>
-                    <input
-                        placeholder={"Pos."}
-                        type={"number"}
-                        value={startPosition[1]}
-                        onChange={(event) =>
-                            setStartPosition(([x, y]) => [x, Number(event.target.value)])
-                        }
-                    />
-                </label>
-                <button
-                    className={"btn btn-md"}
-                    onClick={() => {
-                        if (position.position.length && position.chunk.length) {
-                            setStartChunk(position.chunk as [number, number]);
-                            setStartPosition(position.position as [number, number]);
-                        }
-                    }}
-                >
-                    <Location className={"icon"} />
-                </button>
-            </div>
-            <label>
-                <input
-                    type={"checkbox"}
-                    checked={onlyShowSelectedColors}
-                    onChange={(event) => {
-                        setOnlyShowSelectedColors(event.target.checked);
-                    }}
-                    style={{ marginRight: "10px" }}
-                />
-                Only show selected Colors
-            </label>
-            <ColorPicker
-                colorList={overlays[currentOverlayIndex]?.templateColors}
-                setSelectedColorState={setSelectedColors}
-                selectedColorState={selectedColors}
-            />
+            {error && <div className={"error btn btn-md btn-error"}>{error}</div>}
+            <table className={"table max-sm:text-sm"}>
+                <tbody>
+                    <tr>
+                        <td
+                            className={"column"}
+                            style={{ alignItems: "flex-start", width: "100%" }}
+                        >
+                            <h2> Change Name </h2>
+                            <label className={"input w-full desktop-auto"}>
+                                <span className="label">Name</span>
+                                <input
+                                    onChange={(event) => setChangeName(event.target.value)}
+                                    placeholder={"Name"}
+                                    className={"h-full"}
+                                    onKeyDown={(event) => {
+                                        event.stopPropagation();
+                                    }}
+                                />
+                            </label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td className={"column"} style={{ alignItems: "flex-start" }}>
+                            <h2> Change Coordinates </h2>
+                            <CoordinateForm
+                                chunkValue={startChunk}
+                                coordinateValue={startPosition}
+                                setChunkValue={setStartChunk}
+                                setCoordinateValue={setStartPosition}
+                            />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td className={"column"} style={{ alignItems: "flex-start" }}>
+                            <h2> Set Visible Colors </h2>
+                            <label>
+                                <input
+                                    type={"checkbox"}
+                                    checked={onlyShowSelectedColors}
+                                    onChange={(event) => {
+                                        setOnlyShowSelectedColors(event.target.checked);
+                                    }}
+                                    style={{ marginRight: "10px" }}
+                                />
+                                Only show selected Colors
+                            </label>
+                            <ColorPicker
+                                colorList={overlays[currentOverlayIndex]?.templateColors}
+                                setSelectedColorState={setSelectedColors}
+                                selectedColorState={selectedColors}
+                            />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td className={"column"} style={{ alignItems: "flex-start" }}>
+                            <h2> Change Template Image </h2>
+                            <ImageUpload
+                                setImage={setImage}
+                                setImageColors={setImageColors}
+                                setHeight={setHeight}
+                                setWidth={setWidth}
+                            />
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
             <button
                 className={"btn btn-primary"}
+                disabled={!!error}
                 onClick={() => {
                     setOverlay([
                         ...overlays.slice(0, currentOverlayIndex),
@@ -185,6 +198,23 @@ export const Edit: FC = () => {
                             chunk: startChunk as [number, number],
                             coordinate: startPosition as [number, number],
                             onlyShowSelectedColors,
+
+                            ...(() =>
+                                image
+                                    ? {
+                                          image,
+                                          height,
+                                          width,
+                                          imageColors,
+                                      }
+                                    : {})(),
+
+                            ...(() =>
+                                changeName
+                                    ? {
+                                          name: changeName,
+                                      }
+                                    : {})(),
                         },
                         ...overlays.slice(currentOverlayIndex + 1),
                     ]);

@@ -1,6 +1,4 @@
 import React, { useEffect, useState } from "react";
-import "./App.css";
-import { Button } from "./components/Button/Button";
 import { RouteProvider } from "./components/Router/RouteContext";
 import { Outlet } from "./components/Router/Outlet";
 import { Overview } from "./pages/Overview";
@@ -9,10 +7,15 @@ import { Import } from "./pages/Import";
 import { Edit } from "./pages/Edit";
 import { BlobEventData } from "./fetch";
 import { renderSquares } from "./utils/renderSquares";
-import { useSetAtom, useAtomValue } from "jotai";
+import { useSetAtom, useAtomValue, useAtom } from "jotai";
 import { overlayAtom } from "./atoms/overlay";
 import { positionAtom } from "./atoms/position";
 import { currentTemplates } from "./atoms/currentTemplates";
+import { showOverlayAtom } from "./atoms/showOverlay";
+import { createPortal } from "react-dom";
+import { awaitElement } from "./utils/awaitElement";
+
+import "./App.css";
 
 const routes = new Map([
     ["/", <Overview />],
@@ -22,8 +25,9 @@ const routes = new Map([
 ]);
 
 function App() {
-    const [showOverlay, setShowOverlay] = useState(false);
+    const [showOverlay, setShowOverlay] = useAtom(showOverlayAtom);
     const setPosition = useSetAtom(positionAtom);
+    const [buttonPortal, setButtonPortal] = useState<HTMLDivElement | null>(null);
     const overlays = useAtomValue(overlayAtom);
     const setCurrentTemplates = useSetAtom(currentTemplates);
 
@@ -56,10 +60,31 @@ function App() {
         };
     }, [overlays]);
 
+    useEffect(() => {
+        const mutationOvserver = new MutationObserver(() => {
+            awaitElement(
+                "div.absolute.right-2.top-2.z-30 > div.flex.flex-col.gap-4.items-center > div.flex.flex-col.items-center.gap-3",
+            ).then((element) => {
+                setButtonPortal(element as HTMLDivElement);
+            });
+        });
+
+        mutationOvserver.observe(document.body, { childList: true, subtree: true });
+        return () => mutationOvserver.disconnect();
+    }, []);
+
     return (
         <RouteProvider routes={routes}>
             <div className="App">
-                <Button onClick={() => setShowOverlay(!showOverlay)} />
+                {createPortal(
+                    <div
+                        className={"btn btn-md shadow-md btn-circle"}
+                        onClick={() => setShowOverlay(!showOverlay)}
+                    >
+                        O
+                    </div>,
+                    buttonPortal ?? document.body,
+                )}
                 {showOverlay && <Outlet />}
             </div>
         </RouteProvider>

@@ -9,7 +9,7 @@ import "./fetch";
 log("wplace.live Template Manager successfully loaded.");
 
 async function main() {
-    const body = await awaitElement("body > div");
+    const body = await awaitElement("body");
 
     const container = document.createElement("div");
     body.appendChild(container);
