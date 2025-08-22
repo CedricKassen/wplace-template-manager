@@ -10,21 +10,110 @@ import { useAtom } from "jotai/index";
 import { overlayAtom } from "../atoms/overlay";
 import { Color } from "../colorMap";
 
+const ImportTableRow: FC<{
+    image: string;
+    chunk: [number, number];
+    position: [number, number];
+    name: string;
+}> = ({ image, chunk, position, name }) => {
+    return (
+        <tr>
+            <td>
+                <img
+                    alt={"imported image"}
+                    src={"data:image/bmp;base64," + image}
+                    style={{ width: "2.5rem" }}
+                />
+            </td>
+            <td> {name} </td>
+            <td
+                className={"groupRow coordinates"}
+                style={{ flexGrow: 1, justifyContent: "flex-end" }}
+            >
+                <span className={"btn btn-sm coordinate-display"}> {chunk[0]} </span>
+                <span className={"btn btn-sm coordinate-display"}> {chunk[1]} </span>
+                <span className={"btn btn-sm coordinate-display"}> {position[0]} </span>
+                <span className={"btn btn-sm coordinate-display"}> {position[1]} </span>
+            </td>
+        </tr>
+    );
+};
+
 export const Import: FC = () => {
     const navigate = useNavigate();
     const fileInput = useRef<HTMLInputElement>(null);
-    const imgRef = useRef<HTMLImageElement>(null);
     const [overlays, setOverlays] = useAtom(overlayAtom);
-    const [error, setError] = useState<string | null>(null);
-    const [image, setImage] = useState<string>();
-    const [imageColors, setImageColors] = useState<Color[]>();
-    const [template, setTemplate] = useState<{
-        name: string;
-        chunk: [number, number];
-        position: [number, number];
-    }>();
-    const [height, setHeight] = useState<number>(0);
-    const [width, setWidth] = useState<number>(0);
+    const [notImportedWarning, setNotImportedWarning] = useState<string[]>([]);
+
+    const [fileList, setFileList] = useState<File[]>();
+    const [convertedTemplates, setConvertedTemplates] = useState<
+        {
+            name: string;
+            chunk: [number, number];
+            position: [number, number];
+            height: number;
+            width: number;
+            image: string;
+            imageColors: Color[];
+        }[]
+    >([]);
+
+    useEffect(() => {
+        if (!fileList?.length) return;
+
+        setNotImportedWarning([]);
+        setConvertedTemplates([]);
+
+        for (const file of fileList!) {
+            file.arrayBuffer().then(async (imageArrayBuffer) => {
+                const imageBuffer = Buffer.from(imageArrayBuffer);
+                const chunks = extract(imageBuffer);
+
+                const textChunks = chunks
+                    .filter(function (chunk) {
+                        return chunk.name === "tEXt";
+                    })
+                    .map(function (chunk) {
+                        return text.decode(chunk.data);
+                    });
+
+                const dataChunk = textChunks.find(({ keyword }) => keyword === "wplace");
+                const importedData = dataChunk?.text.split(",");
+
+                if (!importedData) {
+                    setNotImportedWarning((prev) => [...prev, `${file.name}: No metadata found!`]);
+                    return;
+                }
+
+                const overlay = overlays.find((overlay) => overlay.name === importedData[0]);
+
+                if (overlay?.name) {
+                    setNotImportedWarning((prev) => [
+                        ...prev,
+                        `${file.name}: Overlay with name ${importedData[0]} already exists!`,
+                    ]);
+                    return;
+                }
+
+                const bitmap = await createImageBitmap(file);
+                const image = await imageToBase64(file);
+                const imageColors = await getColorsFromImage(bitmap);
+
+                setConvertedTemplates((prev) => [
+                    ...prev,
+                    {
+                        name: importedData[0],
+                        chunk: [Number(importedData[1]), Number(importedData[2])],
+                        position: [Number(importedData[3]), Number(importedData[4])],
+                        height: bitmap.height,
+                        width: bitmap.width,
+                        image,
+                        imageColors,
+                    },
+                ]);
+            });
+        }
+    }, [fileList]);
 
     const pasteHandler = (event: any) => {
         if (!fileInput.current) return;
@@ -37,12 +126,6 @@ export const Import: FC = () => {
         return () => window.removeEventListener("paste", pasteHandler);
     }, []);
 
-    useEffect(() => {
-        if (imgRef.current) {
-            imgRef.current!.src = "data:image/bmp;base64," + image;
-        }
-    }, [image]);
-
     return (
         <Overlay headline={"Import Template"} showBack>
             <label className={"FileInput input w-full"}>
@@ -53,82 +136,56 @@ export const Import: FC = () => {
                     accept={"image/png"}
                     type={"file"}
                     ref={fileInput}
-                    onChange={async (event) => {
-                        if (!fileInput.current?.files?.length) return;
-
-                        const imageBuffer = Buffer.from(
-                            await fileInput.current.files[0].arrayBuffer(),
-                        );
-                        const chunks = extract(imageBuffer);
-
-                        const textChunks = chunks
-                            .filter(function (chunk) {
-                                return chunk.name === "tEXt";
-                            })
-                            .map(function (chunk) {
-                                return text.decode(chunk.data);
-                            });
-
-                        const dataChunk = textChunks.find(({ keyword }) => keyword === "wplace");
-
-                        if (!dataChunk) {
-                            setError("No wplace chunk found! Please create Overlay manually.");
-                            return;
-                        }
-
-                        setError(null);
-                        const importedData = dataChunk.text.split(",");
-                        setTemplate({
-                            name: importedData[0],
-                            chunk: [Number(importedData[1]), Number(importedData[2])],
-                            position: [Number(importedData[3]), Number(importedData[4])],
-                        });
-                        const bitmap = await createImageBitmap(fileInput.current.files[0]);
-                        setHeight(bitmap.height);
-                        setWidth(bitmap.width);
-                        setImage(await imageToBase64(fileInput.current.files[0]));
-                        setImageColors(await getColorsFromImage(bitmap));
+                    multiple={true}
+                    onChange={(e) => {
+                        setFileList(Array.from(e.target.files as ArrayLike<File>));
                     }}
                 />
             </label>
 
-            {error && <div className={"error btn btn-md btn-error"}>{error}</div>}
-
-            {image && <img ref={imgRef} alt={"imported image"} id={"imagePreview"} />}
-
-            {template && (
-                <div className={"groupRow"}>
-                    <span className={"btn btn-sm"}> {template.chunk[0]} </span>
-                    <span className={"btn btn-sm"}> {template.chunk[1]} </span>
-                    <span className={"btn btn-sm"}> {template.position[0]} </span>
-                    <span className={"btn btn-sm"}> {template.position[1]} </span>
+            {!!notImportedWarning.length && (
+                <div
+                    className={"warning btn btn-md btn-warning column p-4"}
+                    style={{ alignItems: "flex-start" }}
+                >
+                    <b>
+                        {notImportedWarning.length}{" "}
+                        {notImportedWarning.length === 1 ? "Template" : "Templates"} could not be
+                        imported for the following reasons:
+                    </b>
+                    <ul>
+                        {notImportedWarning.map((reason) => (
+                            <li>{reason}</li>
+                        ))}
+                    </ul>
                 </div>
             )}
 
+            <table className={"table max-sm:text-sm"}>
+                <tbody>
+                    {convertedTemplates.map((template) => {
+                        return <ImportTableRow {...template} />;
+                    })}
+                </tbody>
+            </table>
+
             <button
                 className={"btn btn-primary"}
-                disabled={!template || !image || !imageColors?.length}
+                disabled={!convertedTemplates?.length}
                 onClick={async () => {
-                    if (!template || !image || !imageColors?.length) {
-                        setError("No overlay selected!");
-                        return;
-                    }
-
-                    setError(null);
-
                     setOverlays([
                         ...overlays,
-                        {
+                        ...convertedTemplates.map((template) => ({
+                            name: template.name,
+                            width: template.width,
+                            height: template.height,
                             chunk: template.chunk,
                             coordinate: template.position,
-                            image,
+                            image: template.image,
                             colorSelection: [],
                             onlyShowSelectedColors: false,
-                            name: template.name,
-                            templateColors: imageColors,
-                            height,
-                            width,
-                        },
+                            templateColors: template.imageColors,
+                        })),
                     ]);
                     navigate("/");
                 }}

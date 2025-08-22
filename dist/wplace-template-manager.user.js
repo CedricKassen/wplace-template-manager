@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wplace.live Template Manager
 // @namespace    https://github.com/cedrickassen/wplace-overlay-manager
-// @version      1.4
+// @version      1.5.0
 // @homepageURL  https://github.com/CedricKassen/wplace-template-manager
 // @supportURL   https://github.com/CedricKassen/wplace-template-manager/issues
 // @license      MIT
@@ -15720,17 +15720,78 @@
   }
   var pngChunksExtractExports = requirePngChunksExtract();
   const extract = /* @__PURE__ */ getDefaultExportFromCjs(pngChunksExtractExports);
+  const ImportTableRow = ({ image, chunk, position, name }) => {
+    return /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", null, /* @__PURE__ */ React.createElement(
+      "img",
+      {
+        alt: "imported image",
+        src: "data:image/bmp;base64," + image,
+        style: { width: "2.5rem" }
+      }
+    )), /* @__PURE__ */ React.createElement("td", null, " ", name, " "), /* @__PURE__ */ React.createElement(
+      "td",
+      {
+        className: "groupRow coordinates",
+        style: { flexGrow: 1, justifyContent: "flex-end" }
+      },
+      /* @__PURE__ */ React.createElement("span", { className: "btn btn-sm coordinate-display" }, " ", chunk[0], " "),
+      /* @__PURE__ */ React.createElement("span", { className: "btn btn-sm coordinate-display" }, " ", chunk[1], " "),
+      /* @__PURE__ */ React.createElement("span", { className: "btn btn-sm coordinate-display" }, " ", position[0], " "),
+      /* @__PURE__ */ React.createElement("span", { className: "btn btn-sm coordinate-display" }, " ", position[1], " ")
+    ));
+  };
   const Import = () => {
     const navigate = useNavigate();
     const fileInput = reactExports.useRef(null);
-    const imgRef = reactExports.useRef(null);
     const [overlays, setOverlays] = useAtom(overlayAtom);
-    const [error, setError] = reactExports.useState(null);
-    const [image, setImage] = reactExports.useState();
-    const [imageColors, setImageColors] = reactExports.useState();
-    const [template, setTemplate] = reactExports.useState();
-    const [height, setHeight] = reactExports.useState(0);
-    const [width, setWidth] = reactExports.useState(0);
+    const [notImportedWarning, setNotImportedWarning] = reactExports.useState([]);
+    const [fileList, setFileList] = reactExports.useState();
+    const [convertedTemplates, setConvertedTemplates] = reactExports.useState([]);
+    reactExports.useEffect(() => {
+      if (!fileList?.length) return;
+      setNotImportedWarning([]);
+      setConvertedTemplates([]);
+      for (const file of fileList) {
+        file.arrayBuffer().then(async (imageArrayBuffer) => {
+          const imageBuffer = bufferExports.Buffer.from(imageArrayBuffer);
+          const chunks = extract(imageBuffer);
+          const textChunks = chunks.filter(function(chunk) {
+            return chunk.name === "tEXt";
+          }).map(function(chunk) {
+            return text.decode(chunk.data);
+          });
+          const dataChunk = textChunks.find(({ keyword }) => keyword === "wplace");
+          const importedData = dataChunk?.text.split(",");
+          if (!importedData) {
+            setNotImportedWarning((prev) => [...prev, `${file.name}: No metadata found!`]);
+            return;
+          }
+          const overlay = overlays.find((overlay2) => overlay2.name === importedData[0]);
+          if (overlay?.name) {
+            setNotImportedWarning((prev) => [
+              ...prev,
+              `${file.name}: Overlay with name ${importedData[0]} already exists!`
+            ]);
+            return;
+          }
+          const bitmap = await createImageBitmap(file);
+          const image = await imageToBase64(file);
+          const imageColors = await getColorsFromImage(bitmap);
+          setConvertedTemplates((prev) => [
+            ...prev,
+            {
+              name: importedData[0],
+              chunk: [Number(importedData[1]), Number(importedData[2])],
+              position: [Number(importedData[3]), Number(importedData[4])],
+              height: bitmap.height,
+              width: bitmap.width,
+              image,
+              imageColors
+            }
+          ]);
+        });
+      }
+    }, [fileList]);
     const pasteHandler = (event) => {
       if (!fileInput.current) return;
       fileInput.current.files = event.clipboardData?.files ?? new FileList();
@@ -15740,11 +15801,6 @@
       window.addEventListener("paste", pasteHandler);
       return () => window.removeEventListener("paste", pasteHandler);
     }, []);
-    reactExports.useEffect(() => {
-      if (imgRef.current) {
-        imgRef.current.src = "data:image/bmp;base64," + image;
-      }
-    }, [image]);
     return /* @__PURE__ */ React.createElement(Overlay, { headline: "Import Template", showBack: true }, /* @__PURE__ */ React.createElement("label", { className: "FileInput input w-full" }, /* @__PURE__ */ React.createElement("span", { className: "label" }, "Template Image"), /* @__PURE__ */ React.createElement(
       "input",
       {
@@ -15753,60 +15809,40 @@
         accept: "image/png",
         type: "file",
         ref: fileInput,
-        onChange: async (event) => {
-          if (!fileInput.current?.files?.length) return;
-          const imageBuffer = bufferExports.Buffer.from(
-            await fileInput.current.files[0].arrayBuffer()
-          );
-          const chunks = extract(imageBuffer);
-          const textChunks = chunks.filter(function(chunk) {
-            return chunk.name === "tEXt";
-          }).map(function(chunk) {
-            return text.decode(chunk.data);
-          });
-          const dataChunk = textChunks.find(({ keyword }) => keyword === "wplace");
-          if (!dataChunk) {
-            setError("No wplace chunk found! Please create Overlay manually.");
-            return;
-          }
-          setError(null);
-          const importedData = dataChunk.text.split(",");
-          setTemplate({
-            name: importedData[0],
-            chunk: [Number(importedData[1]), Number(importedData[2])],
-            position: [Number(importedData[3]), Number(importedData[4])]
-          });
-          const bitmap = await createImageBitmap(fileInput.current.files[0]);
-          setHeight(bitmap.height);
-          setWidth(bitmap.width);
-          setImage(await imageToBase64(fileInput.current.files[0]));
-          setImageColors(await getColorsFromImage(bitmap));
+        multiple: true,
+        onChange: (e) => {
+          setFileList(Array.from(e.target.files));
         }
       }
-    )), error && /* @__PURE__ */ React.createElement("div", { className: "error btn btn-md btn-error" }, error), image && /* @__PURE__ */ React.createElement("img", { ref: imgRef, alt: "imported image", id: "imagePreview" }), template && /* @__PURE__ */ React.createElement("div", { className: "groupRow" }, /* @__PURE__ */ React.createElement("span", { className: "btn btn-sm" }, " ", template.chunk[0], " "), /* @__PURE__ */ React.createElement("span", { className: "btn btn-sm" }, " ", template.chunk[1], " "), /* @__PURE__ */ React.createElement("span", { className: "btn btn-sm" }, " ", template.position[0], " "), /* @__PURE__ */ React.createElement("span", { className: "btn btn-sm" }, " ", template.position[1], " ")), /* @__PURE__ */ React.createElement(
+    )), !!notImportedWarning.length && /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: "warning btn btn-md btn-warning column p-4",
+        style: { alignItems: "flex-start" }
+      },
+      /* @__PURE__ */ React.createElement("b", null, notImportedWarning.length, " ", notImportedWarning.length === 1 ? "Template" : "Templates", " could not be imported for the following reasons:"),
+      /* @__PURE__ */ React.createElement("ul", null, notImportedWarning.map((reason) => /* @__PURE__ */ React.createElement("li", null, reason)))
+    ), /* @__PURE__ */ React.createElement("table", { className: "table max-sm:text-sm" }, /* @__PURE__ */ React.createElement("tbody", null, convertedTemplates.map((template) => {
+      return /* @__PURE__ */ React.createElement(ImportTableRow, { ...template });
+    }))), /* @__PURE__ */ React.createElement(
       "button",
       {
         className: "btn btn-primary",
-        disabled: !template || !image || !imageColors?.length,
+        disabled: !convertedTemplates?.length,
         onClick: async () => {
-          if (!template || !image || !imageColors?.length) {
-            setError("No overlay selected!");
-            return;
-          }
-          setError(null);
           setOverlays([
             ...overlays,
-            {
+            ...convertedTemplates.map((template) => ({
+              name: template.name,
+              width: template.width,
+              height: template.height,
               chunk: template.chunk,
               coordinate: template.position,
-              image,
+              image: template.image,
               colorSelection: [],
               onlyShowSelectedColors: false,
-              name: template.name,
-              templateColors: imageColors,
-              height,
-              width
-            }
+              templateColors: template.imageColors
+            }))
           ]);
           navigate("/");
         }
@@ -16352,7 +16388,7 @@
 ;
 (function(){
                     const el = document.createElement("style");
-                    el.innerText = ".OverlayList {\n    display: flex;\n    flex-direction: column;\n}\n\n.OverlayList > button {\n    padding: 8px;\n    margin-top: 6px;\n}\n\n.OverlayListEntry {\n    display: flex;\n    flex-direction: row;\n    justify-content: space-between;\n    align-items: center;\n    width: 100%;\n    min-width: 24rem;\n    gap: 1.5rem;\n    height: 2.5rem;\n}\n\n.OverlayList span {\n    max-width: 10rem;\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n    min-width: 2.5rem;\n}\n\n.OverlayListEntry > div > img {\n    max-width: 2.5rem;\n    max-height: 2.5rem;\n    border-radius: 100%;\n}\n\n.coordinate-display {\n    width: 3rem;\n}\n\n.coordinates {\n    display: none !important;\n}\n\n@media only screen and (min-width: 575px) {\n    .coordinates {\n        display: flex !important;\n    }\n}.Overlay {\n    position: fixed;\n    display: flex;\n    flex-direction: column;\n    pointer-events: all;\n    gap: 1rem;\n    flex-grow: 0;\n    flex-wrap: nowrap;\n    overflow: auto;\n    width: 100vw;\n    bottom: 0;\n    left: 0;\n    border-radius: var(--radius-box);\n    border-bottom-left-radius: 0;\n    border-bottom-right-radius: 0;\n}\n\n.Overlay > nav {\n    display: flex;\n    flex-direction: row;\n    justify-content: space-between;\n    gap: 1rem;\n}\n\n.Overlay h1 {\n    max-width: 20rem;\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.Overlay > nav > div {\n    display: flex;\n    flex-direction: row;\n    gap: 1rem;\n}\n\n.Overlay > nav > div > button > img {\n    width: 1rem;\n    height: 1rem;\n}\n\n.Overlay input[type=\"number\"] {\n    width: 3.5rem;\n}\n\n@media only screen and (min-width: 835px) {\n    .Overlay {\n        top: 10px;\n        right: 80px;\n        left: unset;\n        height: max-content;\n        width: max-content;\n        max-width: 80vw;\n        max-height: 90vh;\n        border-radius: var(--radius-box);\n    }\n\n    .mobile-only {\n        display: none !important;\n    }\n}.App {\n    position: absolute;\n    top: 0;\n    left: 0;\n    right: 0;\n    bottom: 0;\n    height: 100vh;\n    width: 100vw;\n    z-index: 1000 ;\n    pointer-events: none;\n}\n\n@media only screen and (min-width: 835px) {\n    .App {\n        z-index: 10;\n    }\n}\n\n.App-logo {\n    height: 40vmin;\n}\n.App-link {\n    color: #09d3ac;\n}\n\nh1 {\n    font-size: 16pt;\n    font-weight: bold;\n}\n\n.row {\n    display: flex;\n    flex-direction: row;\n    width: 100%;\n    justify-content: space-between;\n    flex-wrap: wrap;\n    flex-grow: 0;\n    align-items: center;\n    gap: 8px;\n}\n\n.column {\n    display: flex;\n    flex-direction: column;\n    height: 100%;\n    justify-content: center;\n    align-items: center;\n    gap: 8px;\n}\n\n.groupRow {\n    display: flex;\n    flex-direction: row;\n    gap: 0.5rem;\n    align-items: center;\n}\n\n.ColorCheckbox {\n    display: flex;\n    flex-direction: column;\n    align-items: center;\n    position: relative;\n    cursor: pointer;\n}\n\n.icon {\n    width: 1rem;\n    height: 1rem;\n    cursor: pointer;\n}\n\n.ColorCheckbox input[type=\"checkbox\"] {\n    -webkit-appearance: none;\n    -moz-appearance: none;\n    appearance: none;\n    width: 20px;\n    height: 20px;\n    border: 2px solid #ccc;\n    border-radius: 4px;\n    cursor: pointer;\n    position: relative;\n    margin: 0;\n}\n\n.ColorCheckbox input[type=\"checkbox\"]:checked {\n    border-color: #666;\n}\n\n.ColorCheckbox input[type=\"checkbox\"]:checked::before {\n    content: '✓';\n    position: absolute;\n    color: white;\n    font-size: 16px;\n    left: 50%;\n    top: 50%;\n    transform: translate(-50%, -50%);\n    text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);\n}\n\n.ColorCheckbox span {\n    visibility: hidden;\n    background-color: rgba(0, 0, 0, 0.8);\n    color: white;\n    text-align: center;\n    padding: 4px 8px;\n    border-radius: 4px;\n    position: absolute;\n    z-index: 1;\n    bottom: 125%;\n    left: 50%;\n    transform: translateX(-50%);\n    white-space: nowrap;\n    font-size: 14px;\n}\n\n.ColorCheckbox span::after {\n    content: \"\";\n    position: absolute;\n    top: 100%;\n    left: 50%;\n    margin-left: -5px;\n    border-width: 5px;\n    border-style: solid;\n    border-color: rgba(0, 0, 0, 0.8) transparent transparent transparent;\n}\n\n.ColorCheckbox:hover span {\n    visibility: visible;\n}\n\n.FileInput {\n    display: flex;\n    flex-direction: row;\n    align-items: center;\n    justify-content: center;\n    text-align: center;\n}\n\n.FileInput > input::file-selector-button {\n    display: none;\n}\n\n.FileInput > input[type=file] {\n    height: auto;\n    width: min-content;\n}\n\n.icon path {\n    fill: var(--color-base-content);;\n}\n\n#imagePreview {\n    min-height: 4rem;\n    max-height: 12rem;\n}\n\ndetails {\n    user-select: none;\n    display: flex;\n    flex-direction: column;\n    gap: 0.5rem;\n}\n\nsummary {\n    display: flex;\n    cursor: pointer;\n}\n\nsummary::-webkit-details-marker {\n    display: none;\n}\n\ntr {\n    width: 100%;\n    display: flex;\n    flex-direction: row;\n    justify-content: space-between;\n    align-items: center;\n    gap: 1rem;\n}\n\n.input {\n    max-width: max-content;\n}\n\n.Grid {\n    display: grid;\n    grid-template-columns: repeat(6, 2rem);\n    gap: 8px;\n}\n\n@media only screen and (min-width: 350px) {\n    .Overlay {\n        .Grid {\n            grid-template-columns: repeat(8, 2rem);\n        }\n    }\n}\n\n@media only screen and (min-width: 580px) {\n    .Overlay {\n        .Grid {\n            grid-template-columns: repeat(14, 2rem);\n        }\n    }\n\n    .desktop-auto {\n        max-width: unset !important;\n    }\n}\n\nh2 {\n    font-size: 14pt;\n    font-weight: bold;\n}";
+                    el.innerText = ".OverlayList {\n    display: flex;\n    flex-direction: column;\n}\n\n.OverlayList > button {\n    padding: 8px;\n    margin-top: 6px;\n}\n\n.OverlayListEntry {\n    display: flex;\n    flex-direction: row;\n    justify-content: space-between;\n    align-items: center;\n    width: 100%;\n    min-width: 24rem;\n    gap: 1.5rem;\n    height: 2.5rem;\n}\n\n.OverlayList span {\n    max-width: 10rem;\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n    min-width: 2.5rem;\n}\n\n.OverlayListEntry > div > img {\n    max-width: 2.5rem;\n    max-height: 2.5rem;\n    border-radius: 100%;\n}\n\n.coordinate-display {\n    width: 3rem;\n}\n\n.coordinates {\n    display: none !important;\n}\n\n@media only screen and (min-width: 575px) {\n    .coordinates {\n        display: flex !important;\n    }\n}.Overlay {\n    position: fixed;\n    display: flex;\n    flex-direction: column;\n    pointer-events: all;\n    gap: 1rem;\n    flex-grow: 0;\n    flex-wrap: nowrap;\n    overflow: auto;\n    width: 100vw;\n    bottom: 0;\n    left: 0;\n    border-radius: var(--radius-box);\n    border-bottom-left-radius: 0;\n    border-bottom-right-radius: 0;\n}\n\n.Overlay > nav {\n    display: flex;\n    flex-direction: row;\n    justify-content: space-between;\n    gap: 1rem;\n}\n\n.Overlay h1 {\n    max-width: 20rem;\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.Overlay > nav > div {\n    display: flex;\n    flex-direction: row;\n    gap: 1rem;\n}\n\n.Overlay > nav > div > button > img {\n    width: 1rem;\n    height: 1rem;\n}\n\n.Overlay input[type=\"number\"] {\n    width: 3.5rem;\n}\n\n@media only screen and (min-width: 835px) {\n    .Overlay {\n        top: 10px;\n        right: 80px;\n        left: unset;\n        height: max-content;\n        width: max-content;\n        max-width: 80vw;\n        max-height: 90vh;\n        border-radius: var(--radius-box);\n    }\n\n    .mobile-only {\n        display: none !important;\n    }\n}.App {\n    position: absolute;\n    top: 0;\n    left: 0;\n    right: 0;\n    bottom: 0;\n    height: 100vh;\n    width: 100vw;\n    z-index: 1000 ;\n    pointer-events: none;\n}\n\n@media only screen and (min-width: 835px) {\n    .App {\n        z-index: 10;\n    }\n}\n\n.App-logo {\n    height: 40vmin;\n}\n.App-link {\n    color: #09d3ac;\n}\n\n.Overlay h1 {\n    font-size: 16pt;\n    font-weight: bold;\n}\n\n.Overlay .row {\n    display: flex;\n    flex-direction: row;\n    width: 100%;\n    justify-content: space-between;\n    flex-wrap: wrap;\n    flex-grow: 0;\n    align-items: center;\n    gap: 8px;\n}\n\n.Overlay .column {\n    display: flex;\n    flex-direction: column;\n    height: 100%;\n    justify-content: center;\n    align-items: center;\n    gap: 8px;\n}\n\n.groupRow {\n    display: flex;\n    flex-direction: row;\n    gap: 0.5rem;\n    align-items: center;\n}\n\n.ColorCheckbox {\n    display: flex;\n    flex-direction: column;\n    align-items: center;\n    position: relative;\n    cursor: pointer;\n}\n\n.icon {\n    width: 1rem;\n    height: 1rem;\n    cursor: pointer;\n}\n\n.ColorCheckbox input[type=\"checkbox\"] {\n    -webkit-appearance: none;\n    -moz-appearance: none;\n    appearance: none;\n    width: 20px;\n    height: 20px;\n    border: 2px solid #ccc;\n    border-radius: 4px;\n    cursor: pointer;\n    position: relative;\n    margin: 0;\n}\n\n.ColorCheckbox input[type=\"checkbox\"]:checked {\n    border-color: #666;\n}\n\n.ColorCheckbox input[type=\"checkbox\"]:checked::before {\n    content: '✓';\n    position: absolute;\n    color: white;\n    font-size: 16px;\n    left: 50%;\n    top: 50%;\n    transform: translate(-50%, -50%);\n    text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);\n}\n\n.ColorCheckbox span {\n    visibility: hidden;\n    background-color: rgba(0, 0, 0, 0.8);\n    color: white;\n    text-align: center;\n    padding: 4px 8px;\n    border-radius: 4px;\n    position: absolute;\n    z-index: 1;\n    bottom: 125%;\n    left: 50%;\n    transform: translateX(-50%);\n    white-space: nowrap;\n    font-size: 14px;\n}\n\n.ColorCheckbox span::after {\n    content: \"\";\n    position: absolute;\n    top: 100%;\n    left: 50%;\n    margin-left: -5px;\n    border-width: 5px;\n    border-style: solid;\n    border-color: rgba(0, 0, 0, 0.8) transparent transparent transparent;\n}\n\n.ColorCheckbox:hover span {\n    visibility: visible;\n}\n\n.FileInput {\n    display: flex;\n    flex-direction: row;\n    align-items: center;\n    justify-content: center;\n    text-align: center;\n}\n\n.FileInput > input::file-selector-button {\n    display: none;\n}\n\n.FileInput > input[type=file] {\n    height: auto;\n    width: min-content;\n}\n\n.Overlay .icon path {\n    fill: var(--color-base-content);;\n}\n\n#imagePreview {\n    min-height: 4rem;\n    max-height: 12rem;\n}\n\n.Overlay details {\n    user-select: none;\n    display: flex;\n    flex-direction: column;\n    gap: 0.5rem;\n}\n\n.Overlay summary {\n    display: flex;\n    cursor: pointer;\n}\n\n.Overlay summary::-webkit-details-marker {\n    display: none;\n}\n\n.Overlay tr {\n    width: 100%;\n    display: flex;\n    flex-direction: row;\n    justify-content: space-between;\n    align-items: center;\n    gap: 1rem;\n}\n\n.Overlay .input {\n    max-width: max-content;\n}\n\n.Grid {\n    display: grid;\n    grid-template-columns: repeat(6, 2rem);\n    gap: 8px;\n}\n\n@media only screen and (min-width: 350px) {\n    .Overlay {\n        .Grid {\n            grid-template-columns: repeat(8, 2rem);\n        }\n    }\n}\n\n@media only screen and (min-width: 580px) {\n    .Overlay {\n        .Grid {\n            grid-template-columns: repeat(14, 2rem);\n        }\n    }\n\n    .desktop-auto {\n        max-width: unset !important;\n    }\n}\n\n.Overlay h2 {\n    font-size: 14pt;\n    font-weight: bold;\n}\n\n.Overlay img {\n    image-rendering: pixelated;\n}\n\n.Overlay ul {\n    list-style-type: circle;\n    display: flex;\n    flex-direction: column;\n    gap: 0.5rem;\n    align-items: flex-start;\n}";
                     el.type = "text/css";
                     document.head.appendChild(el);
                 })();

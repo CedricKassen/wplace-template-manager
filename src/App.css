@@ -23,12 +23,12 @@
     color: #09d3ac;
 }
 
-h1 {
+.Overlay h1 {
     font-size: 16pt;
     font-weight: bold;
 }
 
-.row {
+.Overlay .row {
     display: flex;
     flex-direction: row;
     width: 100%;
@@ -39,7 +39,7 @@ h1 {
     gap: 8px;
 }
 
-.column {
+.Overlay .column {
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -145,7 +145,7 @@ h1 {
     width: min-content;
 }
 
-.icon path {
+.Overlay .icon path {
     fill: var(--color-base-content);;
 }
 
@@ -154,23 +154,23 @@ h1 {
     max-height: 12rem;
 }
 
-details {
+.Overlay details {
     user-select: none;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
 }
 
-summary {
+.Overlay summary {
     display: flex;
     cursor: pointer;
 }
 
-summary::-webkit-details-marker {
+.Overlay summary::-webkit-details-marker {
     display: none;
 }
 
-tr {
+.Overlay tr {
     width: 100%;
     display: flex;
     flex-direction: row;
@@ -179,7 +179,7 @@ tr {
     gap: 1rem;
 }
 
-.input {
+.Overlay .input {
     max-width: max-content;
 }
 
@@ -209,7 +209,19 @@ tr {
     }
 }
 
-h2 {
+.Overlay h2 {
     font-size: 14pt;
     font-weight: bold;
+}
+
+.Overlay img {
+    image-rendering: pixelated;
+}
+
+.Overlay ul {
+    list-style-type: circle;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-start;
 }
