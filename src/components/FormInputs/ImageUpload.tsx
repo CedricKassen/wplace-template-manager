@@ -91,7 +91,13 @@ export const ImageUpload: FC<{
                     setImage(b64);
                     setLocalImage(b64);
                 });
-                getColorsFromImage(await createImageBitmap(convertedImage)).then(setImageColors);
+
+                const bitmap = await createImageBitmap(convertedImage);
+                getColorsFromImage(bitmap).then(setImageColors);
+                setLocalWidth(bitmap.width);
+                setLocalHeight(bitmap.height);
+                setWidth(bitmap.width);
+                setHeight(bitmap.height);
             });
         }
     };
