@@ -205,7 +205,7 @@ export const Edit: FC = () => {
                                           image,
                                           height,
                                           width,
-                                          imageColors,
+                                          templateColors: imageColors!,
                                       }
                                     : {})(),
 
