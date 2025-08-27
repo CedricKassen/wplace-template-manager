@@ -111,6 +111,7 @@
     transform: translateX(-50%);
     white-space: nowrap;
     font-size: 14px;
+    pointer-events: none;
 }
 
 .ColorCheckbox span::after {
@@ -124,7 +125,7 @@
     border-color: rgba(0, 0, 0, 0.8) transparent transparent transparent;
 }
 
-.ColorCheckbox:hover span {
+.ColorCheckbox input[type="checkbox"]:hover + span {
     visibility: visible;
 }
 
