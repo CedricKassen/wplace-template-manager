@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wplace.live Template Manager
 // @namespace    https://github.com/cedrickassen/wplace-overlay-manager
-// @version      1.7.1
+// @version      1.7.2
 // @homepageURL  https://github.com/CedricKassen/wplace-template-manager
 // @supportURL   https://github.com/CedricKassen/wplace-template-manager/issues
 // @license      MIT
@@ -10,7 +10,7 @@
 // @downloadURL  https://raw.githubusercontent.com/CedricKassen/wplace-template-manager/refs/heads/main/dist/wplace-template-manager.user.js
 // @author       Cedric Kassen
 // @match        *://*.wplace.live/*
-// @run-at       document-start
+// @run-at       document-idle
 // @grant        GM_getResourceText
 // @grant        GM_addStyle
 // @grant        GM.setValue
