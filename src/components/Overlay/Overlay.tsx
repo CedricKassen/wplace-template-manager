@@ -5,10 +5,17 @@ import { Chevron } from "../Icons/Chevron";
 import { useSetAtom } from "jotai";
 import { showOverlayAtom } from "../../atoms/showOverlay";
 import { X } from "../Icons/X";
+import { CloseButton } from "../Buttons/Close";
 
 export const Overlay: FC<
-    PropsWithChildren<{ showBack?: boolean; headline?: string; customRenderer?: ReactNode }>
-> = ({ children, headline, showBack, customRenderer }) => {
+    PropsWithChildren<{
+        showBack?: boolean;
+        headline?: string;
+        customRenderer?: ReactNode;
+        closeButtonHandler?: () => void;
+        noClose?: boolean;
+    }>
+> = ({ children, headline, showBack, customRenderer, closeButtonHandler, noClose }) => {
     const navigate = useNavigate();
     const setShowOverlay = useSetAtom(showOverlayAtom);
 
@@ -26,13 +33,15 @@ export const Overlay: FC<
                     </div>
                     <div>
                         {customRenderer}
-                        <button
-                            onClick={() => {
-                                setShowOverlay(false);
-                            }}
-                        >
-                            <X className={"icon mobile-only"} />
-                        </button>
+                        {!noClose && (
+                            <CloseButton
+                                onClick={() => {
+                                    closeButtonHandler
+                                        ? closeButtonHandler()
+                                        : setShowOverlay(false);
+                                }}
+                            />
+                        )}
                     </div>
                 </nav>
             )}
