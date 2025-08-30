@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wplace.live Template Manager
 // @namespace    https://github.com/cedrickassen/wplace-overlay-manager
-// @version      1.7.4
+// @version      1.7.5
 // @homepageURL  https://github.com/CedricKassen/wplace-template-manager
 // @supportURL   https://github.com/CedricKassen/wplace-template-manager/issues
 // @license      MIT
@@ -15529,7 +15529,7 @@
     ), /* @__PURE__ */ React.createElement(
       "button",
       {
-        disabled: !name || !image || !startChunk.length || !startPosition.length || !!error,
+        disabled: !image || !startChunk.length || !startPosition.length || !!error,
         className: "btn btn-primary",
         onClick: async () => {
           setOverlays([
@@ -16337,6 +16337,7 @@
     const [showOverlay, setShowOverlay] = useAtom(showOverlayAtom);
     const setPosition = useSetAtom(positionAtom);
     const [buttonPortal, setButtonPortal] = reactExports.useState(null);
+    const [canvasElement, setCanvasElement] = reactExports.useState(null);
     const overlays = useAtomValue(overlayAtom);
     const handleMessage = async (event) => {
       const { source, blob, requestId, chunk, position } = event.data;
@@ -16359,15 +16360,15 @@
       };
     }, [overlays]);
     reactExports.useEffect(() => {
-      const mutationOvserver = new MutationObserver(() => {
+      const mutationObserver = new MutationObserver(() => {
         awaitElement(
           "div.absolute.right-2.top-2.z-30 > div.flex.flex-col.gap-4.items-center > div.flex.flex-col.items-center.gap-3"
         ).then((element) => {
           setButtonPortal(element);
         });
       });
-      mutationOvserver.observe(document.body, { childList: true, subtree: true });
-      return () => mutationOvserver.disconnect();
+      mutationObserver.observe(document.body, { childList: true, subtree: true });
+      return () => mutationObserver.disconnect();
     }, []);
     return /* @__PURE__ */ React.createElement(RouteProvider, { routes }, /* @__PURE__ */ React.createElement("div", { className: "App" }, reactDomExports.createPortal(
       /* @__PURE__ */ React.createElement(

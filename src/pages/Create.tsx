@@ -61,7 +61,7 @@ export const Create: FC = () => {
                 setName={setPreviewName}
             />
             <button
-                disabled={!name || !image || !startChunk.length || !startPosition.length || !!error}
+                disabled={!image || !startChunk.length || !startPosition.length || !!error}
                 className={"btn btn-primary"}
                 onClick={async () => {
                     setOverlays([

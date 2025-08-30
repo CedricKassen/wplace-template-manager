@@ -27,6 +27,7 @@ function App() {
     const [showOverlay, setShowOverlay] = useAtom(showOverlayAtom);
     const setPosition = useSetAtom(positionAtom);
     const [buttonPortal, setButtonPortal] = useState<HTMLDivElement | null>(null);
+    const [canvasElement, setCanvasElement] = useState<HTMLCanvasElement | null>(null);
     const overlays = useAtomValue(overlayAtom);
 
     const handleMessage = async (event: MessageEvent) => {
@@ -55,7 +56,7 @@ function App() {
     }, [overlays]);
 
     useEffect(() => {
-        const mutationOvserver = new MutationObserver(() => {
+        const mutationObserver = new MutationObserver(() => {
             awaitElement(
                 "div.absolute.right-2.top-2.z-30 > div.flex.flex-col.gap-4.items-center > div.flex.flex-col.items-center.gap-3",
             ).then((element) => {
@@ -63,8 +64,8 @@ function App() {
             });
         });
 
-        mutationOvserver.observe(document.body, { childList: true, subtree: true });
-        return () => mutationOvserver.disconnect();
+        mutationObserver.observe(document.body, { childList: true, subtree: true });
+        return () => mutationObserver.disconnect();
     }, []);
 
     return (
