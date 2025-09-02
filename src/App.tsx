@@ -15,6 +15,7 @@ import { createPortal } from "react-dom";
 import { awaitElement } from "./utils/awaitElement";
 
 import "./App.css";
+import { IconContext, PaintBrushHouseholdIcon, PaintBrushIcon } from "@phosphor-icons/react";
 
 const routes = new Map([
     ["/", <Overview />],
@@ -70,18 +71,26 @@ function App() {
 
     return (
         <RouteProvider routes={routes}>
-            <div className="App">
-                {createPortal(
-                    <div
-                        className={"btn btn-md shadow-md btn-circle"}
-                        onClick={() => setShowOverlay(!showOverlay)}
-                    >
-                        O
-                    </div>,
-                    buttonPortal ?? document.body,
-                )}
-                {showOverlay && <Outlet />}
-            </div>
+            <IconContext.Provider
+                value={{
+                    size: 20,
+                    mirrored: false,
+                    weight: "bold",
+                }}
+            >
+                <div className="App">
+                    {createPortal(
+                        <div
+                            className={"btn btn-md shadow-md btn-circle"}
+                            onClick={() => setShowOverlay(!showOverlay)}
+                        >
+                            <PaintBrushHouseholdIcon />
+                        </div>,
+                        buttonPortal ?? document.body,
+                    )}
+                    {showOverlay && <Outlet />}
+                </div>
+            </IconContext.Provider>
         </RouteProvider>
     );
 }

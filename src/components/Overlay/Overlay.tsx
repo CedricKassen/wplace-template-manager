@@ -1,11 +1,10 @@
 import React, { FC, PropsWithChildren, ReactNode } from "react";
 import "./Overlay.css";
 import { useNavigate } from "../Router/navigate";
-import { Chevron } from "../Icons/Chevron";
 import { useSetAtom } from "jotai";
 import { showOverlayAtom } from "../../atoms/showOverlay";
-import { X } from "../Icons/X";
 import { CloseButton } from "../Buttons/Close";
+import { CaretLeftIcon } from "@phosphor-icons/react";
 
 export const Overlay: FC<
     PropsWithChildren<{
@@ -26,7 +25,7 @@ export const Overlay: FC<
                     <div>
                         {showBack && (
                             <button onClick={() => navigate("/")}>
-                                <Chevron className={"icon"} />
+                                <CaretLeftIcon />
                             </button>
                         )}
                         {headline && <h3 className={"text-lg"}>{headline}</h3>}

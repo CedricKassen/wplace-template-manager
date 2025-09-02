@@ -2,9 +2,7 @@ import React, { FC, useEffect, useRef } from "react";
 import { useNavigate } from "../Router/navigate";
 import { JumpEventData } from "../../fetch";
 import { awaitElement } from "../../utils/awaitElement";
-import { Location } from "../Icons/Location";
-import { Cog } from "../Icons/Cog";
-import { Eye } from "../Icons/Eye";
+import { EyeClosedIcon, EyeIcon, GearIcon, MapPinIcon } from "@phosphor-icons/react";
 
 export const OverlayListEntry: FC<{
     image: string;
@@ -40,11 +38,11 @@ export const OverlayListEntry: FC<{
                 <span className={"btn btn-sm coordinate-display"}> {position[1]} </span>
             </td>
             <td className={"groupRow"} style={{ gap: "2rem" }}>
-                <button>
-                    <Eye className={"icon"} closed={isHidden} onClick={toggleVisiblity} />
+                <button onClick={toggleVisiblity}>
+                    {isHidden ? <EyeClosedIcon /> : <EyeIcon />}
                 </button>
                 <button onClick={() => navigate("/edit/" + name)}>
-                    <Cog className={"icon"} />
+                    <GearIcon />
                 </button>
                 <button
                     onClick={() => {
@@ -60,7 +58,7 @@ export const OverlayListEntry: FC<{
                         });
                     }}
                 >
-                    <Location className={"icon"} />
+                    <MapPinIcon />
                 </button>
             </td>
         </tr>

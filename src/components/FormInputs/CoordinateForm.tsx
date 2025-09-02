@@ -1,7 +1,7 @@
-import { Location } from "../Icons/Location";
 import React, { Dispatch, FC, SetStateAction } from "react";
 import { useAtom } from "jotai/index";
 import { positionAtom } from "../../atoms/position";
+import { MapPinIcon } from "@phosphor-icons/react";
 
 export const CoordinateForm: FC<{
     chunkValue: number[];
@@ -70,7 +70,7 @@ export const CoordinateForm: FC<{
                         }
                     }}
                 >
-                    <Location className={"icon"} />
+                    <MapPinIcon />
                 </button>
             )}
         </div>

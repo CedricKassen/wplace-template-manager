@@ -26,7 +26,7 @@ export const Overview: FC = () => {
                     navigate("/create");
                 }}
             >
-                Create new Overlay
+                Create new Template
             </button>
         </Overlay>
     );
