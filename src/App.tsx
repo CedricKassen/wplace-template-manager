@@ -5,7 +5,6 @@ import { Overview } from "./pages/Overview";
 import { Create } from "./pages/Create";
 import { Import } from "./pages/Import";
 import { Edit } from "./pages/Edit";
-import { BlobEventData } from "./fetch";
 import { renderSquares } from "./utils/renderSquares";
 import { useSetAtom, useAtomValue, useAtom } from "jotai";
 import { overlayAtom } from "./atoms/overlay";

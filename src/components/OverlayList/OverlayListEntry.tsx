@@ -1,6 +1,5 @@
 import React, { FC, useEffect, useRef } from "react";
 import { useNavigate } from "../Router/navigate";
-import { JumpEventData } from "../../fetch";
 import { awaitElement } from "../../utils/awaitElement";
 import { EyeClosedIcon, EyeIcon, GearIcon, MapPinIcon } from "@phosphor-icons/react";
 
@@ -50,7 +49,7 @@ export const OverlayListEntry: FC<{
                             source: "overlay-location-service",
                             chunk,
                             position: [position[0] + width / 2, position[1] + height / 2],
-                        } as JumpEventData);
+                        });
                         awaitElement("button[title='Explore']").then((button) => {
                             button.dispatchEvent(
                                 new Event("click", { bubbles: true, cancelable: true }),
