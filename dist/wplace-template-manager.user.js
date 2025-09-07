@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wplace.live Template Manager
 // @namespace    https://github.com/cedrickassen/wplace-overlay-manager
-// @version      1.8.1
+// @version      1.8.2
 // @homepageURL  https://github.com/CedricKassen/wplace-template-manager
 // @supportURL   https://github.com/CedricKassen/wplace-template-manager/issues
 // @license      MIT
@@ -15669,7 +15669,7 @@
               image,
               colorSelection: [],
               onlyShowSelectedColors: false,
-              name: name ?? previewName ?? "New Overlay " + overlays.length + 1,
+              name: name && name !== "" ? name : previewName ?? "New Overlay " + overlays.length,
               templateColors: imageColors,
               height,
               width,

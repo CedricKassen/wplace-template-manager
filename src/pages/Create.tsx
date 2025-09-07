@@ -72,7 +72,10 @@ export const Create: FC = () => {
                             image: image!,
                             colorSelection: [],
                             onlyShowSelectedColors: false,
-                            name: name ?? previewName ?? "New Overlay " + overlays.length + 1,
+                            name:
+                                name && name !== ""
+                                    ? name
+                                    : (previewName ?? "New Overlay " + overlays.length),
                             templateColors: imageColors!,
                             height,
                             width,
