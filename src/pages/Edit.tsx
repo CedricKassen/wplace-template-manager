@@ -30,7 +30,7 @@ export const Edit: FC = () => {
 
     const [overlays, setOverlay] = useAtom(overlayAtom);
     const [onlyShowSelectedColors, setOnlyShowSelectedColors] = useState<boolean>(false);
-    const name = useParam("name");
+    const name = useParam("name") ?? "";
     const navigate = useNavigate();
 
     const currentOverlayIndex = useMemo(() => {
@@ -188,7 +188,7 @@ export const Edit: FC = () => {
             </table>
             <button
                 className={"btn btn-primary"}
-                disabled={!!error}
+                disabled={!!error || (!name && !changeName)}
                 onClick={() => {
                     setOverlay([
                         ...overlays.slice(0, currentOverlayIndex),

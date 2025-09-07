@@ -22,13 +22,13 @@ const routes = new Map([
     ["/create", <Create />],
     ["/import", <Import />],
     ["/edit/{name}", <Edit />],
+    ["/edit/", <Edit />],
 ]);
 
 function App() {
     const [showOverlay, setShowOverlay] = useAtom(showOverlayAtom);
     const setPosition = useSetAtom(positionAtom);
     const [buttonPortal, setButtonPortal] = useState<HTMLDivElement | null>(null);
-    const [canvasElement, setCanvasElement] = useState<HTMLCanvasElement | null>(null);
     const overlays = useAtomValue(overlayAtom);
 
     const handleMessage = async (event: MessageEvent) => {
