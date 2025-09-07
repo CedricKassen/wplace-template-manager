@@ -9,36 +9,42 @@ export async function renderSquares(
     overlays: Overlay[],
     chunkX: number,
     chunkY: number,
-): Promise<Blob | null> {
+): Promise<Blob> {
     const CANVAS_SIZE = 1000;
     const RESCALE_FACTOR = 3; // 3x3 pixel size
     const RESCALED_CANVAS_SIZE = CANVAS_SIZE * RESCALE_FACTOR;
 
     const expandedOverlays = await Promise.all(
         overlays.map(async (overlay) => {
-            const image = base64ToImage(overlay.image, "image/png");
-            const bitmap = await createImageBitmap(image);
+            if (!overlay.bitmap || !overlay.bitmap.width) {
+                const image = base64ToImage(overlay.image, "image/png");
+                overlay.bitmap = await createImageBitmap(image, {
+                    imageOrientation: "from-image",
+                });
+            }
 
             return {
                 ...overlay,
-                height: bitmap.height,
-                width: bitmap.width,
-                bitmap: bitmap,
+                height: overlay.bitmap.height,
+                width: overlay.bitmap.width,
                 toChunkX:
                     overlay.chunk[0] +
-                    Math.floor((overlay.coordinate[0] + bitmap.width) / CANVAS_SIZE),
+                    Math.floor((overlay.coordinate[0] + overlay.bitmap.width) / CANVAS_SIZE),
                 toChunkY:
                     overlay.chunk[1] +
-                    Math.floor((overlay.coordinate[1] + bitmap.height) / CANVAS_SIZE),
+                    Math.floor((overlay.coordinate[1] + overlay.bitmap.height) / CANVAS_SIZE),
             };
         }),
     );
     const chunkOverlays = expandedOverlays.filter((overlay) => {
+        if (overlay.hidden) return false;
         const greaterThanMin = chunkX >= overlay.chunk[0] && chunkY >= overlay.chunk[1];
         const smallerThanMax = chunkX <= overlay.toChunkX && chunkY <= overlay.toChunkY;
-
         return greaterThanMin && smallerThanMax;
     });
+
+    if (chunkOverlays.length === 0)
+        return baseBlob;
 
     const renderingCanvas = new CustomCanvas(RESCALED_CANVAS_SIZE);
 
@@ -46,20 +52,13 @@ export async function renderSquares(
     renderingCanvas.ctx.drawImage(img, 0, 0, RESCALED_CANVAS_SIZE, RESCALED_CANVAS_SIZE);
 
     for (const overlay of chunkOverlays) {
-        if (overlay.hidden) continue;
-
         const chunkXIndex = overlay.toChunkX - overlay.chunk[0] - (overlay.toChunkX - chunkX);
         const chunkYIndex = overlay.toChunkY - overlay.chunk[1] - (overlay.toChunkY - chunkY);
 
-        const image = base64ToImage(overlay.image, "image/png");
-        const bitmap = await createImageBitmap(image, {
-            imageOrientation: "from-image",
-        });
-
         let colorFilter: ColorValue[] | undefined;
 
-        if (overlay?.onlyShowSelectedColors) {
-            colorFilter = overlay?.colorSelection.map((color) => {
+        if (overlay.onlyShowSelectedColors) {
+            colorFilter = overlay.colorSelection.map((color) => {
                 const freeColor = FreeColorMap.get(color as keyof typeof FreeColor);
                 if (freeColor) {
                     return freeColor;
@@ -69,7 +68,7 @@ export async function renderSquares(
             });
         }
 
-        const templateBitmap = await createTemplateBitmap(bitmap, RESCALE_FACTOR, colorFilter);
+        const templateBitmap = await createTemplateBitmap(overlay.bitmap!, RESCALE_FACTOR, colorFilter);
 
         renderingCanvas.ctx.drawImage(
             templateBitmap,
@@ -81,7 +80,7 @@ export async function renderSquares(
     }
 
     const blob = await new Promise<Blob>((resolve) => {
-        renderingCanvas.canvas.toBlob((blob) => resolve(blob!));
+        renderingCanvas.canvas.toBlob((b) => resolve(b || baseBlob), "image/png");
     });
 
     renderingCanvas.destroy();
