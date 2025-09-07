@@ -37,11 +37,14 @@ export async function renderSquares(
         }),
     );
     const chunkOverlays = expandedOverlays.filter((overlay) => {
+        if (overlay.hidden) return false;
         const greaterThanMin = chunkX >= overlay.chunk[0] && chunkY >= overlay.chunk[1];
         const smallerThanMax = chunkX <= overlay.toChunkX && chunkY <= overlay.toChunkY;
-
         return greaterThanMin && smallerThanMax;
     });
+
+    if (chunkOverlays.length === 0)
+        return baseBlob;
 
     const renderingCanvas = new CustomCanvas(RESCALED_CANVAS_SIZE);
 
@@ -49,8 +52,6 @@ export async function renderSquares(
     renderingCanvas.ctx.drawImage(img, 0, 0, RESCALED_CANVAS_SIZE, RESCALED_CANVAS_SIZE);
 
     for (const overlay of chunkOverlays) {
-        if (overlay.hidden) continue;
-
         const chunkXIndex = overlay.toChunkX - overlay.chunk[0] - (overlay.toChunkX - chunkX);
         const chunkYIndex = overlay.toChunkY - overlay.chunk[1] - (overlay.toChunkY - chunkY);
 
