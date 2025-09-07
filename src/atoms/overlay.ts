@@ -5,6 +5,7 @@ export type Overlay = {
     chunk: [number, number];
     coordinate: [number, number];
     image: string;
+    bitmap: ImageBitmap | null;
     height: number;
     width: number;
     templateColors: Color[];
