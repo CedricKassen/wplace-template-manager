@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wplace.live Template Manager
 // @namespace    https://github.com/cedrickassen/wplace-overlay-manager
-// @version      1.8.2
+// @version      1.8.3
 // @homepageURL  https://github.com/CedricKassen/wplace-template-manager
 // @supportURL   https://github.com/CedricKassen/wplace-template-manager/issues
 // @license      MIT
@@ -15364,7 +15364,7 @@
   var bufferExports = requireBuffer();
   async function imageToBase64(image) {
     const arrayBuffer = await image.arrayBuffer();
-    return new bufferExports.Buffer(arrayBuffer).toString("base64");
+    return bufferExports.Buffer.from(arrayBuffer).toString("base64");
   }
   const rgbToHex = (r, g, b) => {
     return "#" + r.toString(16).padStart(2, "0") + g.toString(16).padStart(2, "0") + b.toString(16).padStart(2, "0");
@@ -15673,7 +15673,8 @@
               templateColors: imageColors,
               height,
               width,
-              hidden: false
+              hidden: false,
+              bitmap: null
             }
           ]);
           navigate("/");
@@ -15985,7 +15986,7 @@
             return text.decode(chunk.data);
           });
           const dataChunk = textChunks.find(({ keyword }) => keyword === "wplace");
-          const importedData = dataChunk?.text.split(",");
+          const importedData = dataChunk?.text?.split(",");
           if (!importedData) {
             setNotImportedWarning((prev) => [...prev, `${file.name}: No metadata found!`]);
             return;
@@ -16065,7 +16066,9 @@
               image: template.image,
               colorSelection: [],
               onlyShowSelectedColors: false,
-              templateColors: template.imageColors
+              templateColors: template.imageColors,
+              hidden: false,
+              bitmap: null
             }))
           ]);
           navigate("/");
@@ -16336,7 +16339,8 @@
                   image,
                   height,
                   width,
-                  templateColors: imageColors
+                  templateColors: imageColors,
+                  bitmap: null
                 } : {})(),
                 .../* @__PURE__ */ (() => changeName ? {
                   name: changeName
@@ -16357,37 +16361,38 @@
     const RESCALED_CANVAS_SIZE = CANVAS_SIZE * RESCALE_FACTOR;
     const expandedOverlays = await Promise.all(
       overlays.map(async (overlay) => {
-        const image = base64ToImage(overlay.image, "image/png");
-        const bitmap = await createImageBitmap(image);
+        if (!overlay.bitmap || !overlay.bitmap.width) {
+          const image = base64ToImage(overlay.image, "image/png");
+          overlay.bitmap = await createImageBitmap(image, {
+            imageOrientation: "from-image"
+          });
+        }
         return {
           ...overlay,
-          height: bitmap.height,
-          width: bitmap.width,
-          bitmap,
-          toChunkX: overlay.chunk[0] + Math.floor((overlay.coordinate[0] + bitmap.width) / CANVAS_SIZE),
-          toChunkY: overlay.chunk[1] + Math.floor((overlay.coordinate[1] + bitmap.height) / CANVAS_SIZE)
+          height: overlay.bitmap.height,
+          width: overlay.bitmap.width,
+          toChunkX: overlay.chunk[0] + Math.floor((overlay.coordinate[0] + overlay.bitmap.width) / CANVAS_SIZE),
+          toChunkY: overlay.chunk[1] + Math.floor((overlay.coordinate[1] + overlay.bitmap.height) / CANVAS_SIZE)
         };
       })
     );
     const chunkOverlays = expandedOverlays.filter((overlay) => {
+      if (overlay.hidden) return false;
       const greaterThanMin = chunkX >= overlay.chunk[0] && chunkY >= overlay.chunk[1];
       const smallerThanMax = chunkX <= overlay.toChunkX && chunkY <= overlay.toChunkY;
       return greaterThanMin && smallerThanMax;
     });
+    if (chunkOverlays.length === 0)
+      return baseBlob;
     const renderingCanvas = new CustomCanvas(RESCALED_CANVAS_SIZE);
     const img = await createImageBitmap(baseBlob);
     renderingCanvas.ctx.drawImage(img, 0, 0, RESCALED_CANVAS_SIZE, RESCALED_CANVAS_SIZE);
     for (const overlay of chunkOverlays) {
-      if (overlay.hidden) continue;
       const chunkXIndex = overlay.toChunkX - overlay.chunk[0] - (overlay.toChunkX - chunkX);
       const chunkYIndex = overlay.toChunkY - overlay.chunk[1] - (overlay.toChunkY - chunkY);
-      const image = base64ToImage(overlay.image, "image/png");
-      const bitmap = await createImageBitmap(image, {
-        imageOrientation: "from-image"
-      });
       let colorFilter;
-      if (overlay?.onlyShowSelectedColors) {
-        colorFilter = overlay?.colorSelection.map((color) => {
+      if (overlay.onlyShowSelectedColors) {
+        colorFilter = overlay.colorSelection.map((color) => {
           const freeColor = FreeColorMap.get(color);
           if (freeColor) {
             return freeColor;
@@ -16396,7 +16401,7 @@
           }
         });
       }
-      const templateBitmap = await createTemplateBitmap(bitmap, RESCALE_FACTOR, colorFilter);
+      const templateBitmap = await createTemplateBitmap(overlay.bitmap, RESCALE_FACTOR, colorFilter);
       renderingCanvas.ctx.drawImage(
         templateBitmap,
         overlay.coordinate[0] * RESCALE_FACTOR - chunkXIndex * RESCALED_CANVAS_SIZE,
@@ -16406,7 +16411,7 @@
       );
     }
     const blob = await new Promise((resolve) => {
-      renderingCanvas.canvas.toBlob((blob2) => resolve(blob2));
+      renderingCanvas.canvas.toBlob((b) => resolve(b || baseBlob), "image/png");
     });
     renderingCanvas.destroy();
     return blob;
@@ -16468,26 +16473,96 @@
     const setPosition = useSetAtom(positionAtom);
     const [buttonPortal, setButtonPortal] = reactExports.useState(null);
     const overlays = useAtomValue(overlayAtom);
-    const handleMessage = async (event) => {
-      const { source, blob, requestId, chunk, position } = event.data;
-      if (source === "wplace-tile-request") {
-        window.postMessage({
-          requestId,
-          source: "overlay-renderer",
-          blob: await renderSquares(blob, overlays, chunk[0], chunk[1]),
-          chunk
-        });
-      }
-      if (source === "wplace-position-request") {
-        setPosition({ position, chunk });
-      }
+    const sharedData = {
+      overlays,
+      jumpTo: {
+        chunk: null,
+        position: null
+      },
+      pixelUrlRegex: new RegExp(
+        "^https://backend\\.wplace\\.live/s\\d+/pixel/(\\d+)/(\\d+)\\?x=(\\d+)&y=(\\d+)$"
+      ),
+      filesUrlRegex: new RegExp(
+        "^https://backend\\.wplace\\.live/files/s\\d+/tiles/(\\d+)/(\\d+)\\.png$"
+      ),
+      randomTileUrlRegex: new RegExp("^https://backend\\.wplace\\.live/s\\d+/tile/random$")
     };
     reactExports.useEffect(() => {
+      const originals = {
+        blob: Response.prototype.blob,
+        json: Response.prototype.json,
+        arrayBuffer: Response.prototype.arrayBuffer
+      };
+      const handleMessage = (event) => {
+        const { source, chunk, position } = event.data;
+        if (source === "overlay-location-service") {
+          sharedData.jumpTo.position = position;
+          sharedData.jumpTo.chunk = chunk;
+        }
+      };
       window.addEventListener("message", handleMessage);
+      Response.prototype.blob = async function() {
+        if (!this.url || this.url.length === 0) {
+          return originals.blob.call(this);
+        }
+        if (sharedData.filesUrlRegex.test(this.url)) {
+          const m = sharedData.filesUrlRegex.exec(this.url);
+          if (m) {
+            const [, chunkX, chunkY] = m;
+            const origBlob = await originals.blob.call(this);
+            const overlayBlob = await renderSquares(
+              origBlob,
+              sharedData.overlays,
+              parseInt(chunkX, 10),
+              parseInt(chunkY, 10)
+            );
+            return overlayBlob || origBlob;
+          }
+        }
+        return originals.blob.call(this);
+      };
+      Response.prototype.arrayBuffer = async function() {
+        const blob = await this.blob();
+        return blob.arrayBuffer();
+      };
+      Response.prototype.json = async function() {
+        if (!this.url || this.url.length === 0) {
+          return originals.json.call(this);
+        }
+        if (sharedData.randomTileUrlRegex.test(this.url)) {
+          if (sharedData.jumpTo.chunk && sharedData.jumpTo.position) {
+            const jumpResponse = {
+              pixel: {
+                x: sharedData.jumpTo.position[0],
+                y: sharedData.jumpTo.position[1]
+              },
+              tile: {
+                x: sharedData.jumpTo.chunk[0],
+                y: sharedData.jumpTo.chunk[1]
+              }
+            };
+            sharedData.jumpTo.chunk = null;
+            sharedData.jumpTo.position = null;
+            return jumpResponse;
+          }
+        } else if (sharedData.pixelUrlRegex.test(this.url)) {
+          const m = sharedData.pixelUrlRegex.exec(this.url);
+          if (m) {
+            const [, chunkX, chunkY, positionX, positionY] = m;
+            const chunk = [parseInt(chunkX, 10), parseInt(chunkY, 10)];
+            const position = [parseInt(positionX, 10), parseInt(positionY, 10)];
+            setPosition({ position, chunk });
+          }
+        }
+        return originals.json.call(this);
+      };
       return () => {
         window.removeEventListener("message", handleMessage);
+        Response.prototype.blob = originals.blob;
+        Response.prototype.json = originals.json;
+        Response.prototype.arrayBuffer = originals.arrayBuffer;
       };
-    }, [overlays]);
+    }, [sharedData]);
     reactExports.useEffect(() => {
       const mutationObserver = new MutationObserver(() => {
         awaitElement(
@@ -16521,107 +16596,6 @@
       ), showOverlay && /* @__PURE__ */ React.createElement(Outlet, null))
     ));
   }
-  function inject(callback) {
-    const script = document.createElement("script");
-    script.textContent = `(${callback})();`;
-    document.documentElement?.appendChild(script);
-    script.remove();
-  }
-  inject(() => {
-    const BlobQueue = /* @__PURE__ */ new Map();
-    let jumpToPosition = null;
-    let jumpToChunk = null;
-    const matchPattern = (pattern, path) => {
-      const regexPattern = pattern.replace(/\./g, "\\.").replace(/\*/g, ".*");
-      const regex = new RegExp(`^${regexPattern}$`);
-      return regex.test(path);
-    };
-    window.addEventListener("message", (event) => {
-      const { source, blob, requestId, position, chunk } = event.data;
-      if (source === "overlay-renderer") {
-        const callback = BlobQueue.get(requestId);
-        callback(blob);
-      }
-      if (source === "overlay-location-service") {
-        jumpToPosition = position;
-        jumpToChunk = chunk;
-      }
-    });
-    function createFetch(originalFetch2) {
-      return async (input, init) => {
-        const response = originalFetch2(input, init);
-        let route;
-        if (input.url?.length) {
-          route = input.url;
-        } else {
-          route = input.toString();
-        }
-        const originalResponse = await response;
-        if (matchPattern("https://backend.wplace.live/s0/tile/random", route)) {
-          if (jumpToPosition && jumpToChunk) {
-            const response2 = new Response(
-              JSON.stringify({
-                pixel: { x: jumpToPosition[0], y: jumpToPosition[1] },
-                tile: { x: jumpToChunk[0], y: jumpToChunk[1] }
-              }),
-              {
-                headers: originalResponse.headers,
-                status: originalResponse.status,
-                statusText: originalResponse.statusText
-              }
-            );
-            jumpToChunk = null;
-            jumpToPosition = null;
-            return response2;
-          }
-        }
-        if (route.startsWith("https://backend.wplace.live/s0/pixel/")) {
-          const segments = route.split("/");
-          const rawData = segments.pop();
-          const chunkX2 = segments.pop();
-          const chunkY2 = rawData?.match(/^(\d+)\?/);
-          const positionX = rawData?.match(/x=(\d+)/);
-          const positionY = rawData?.match(/y=(\d+)/);
-          if (!chunkX2 || !chunkY2 || !positionX || !positionY) {
-            console.warn("Couldn't read chunk and position from request!");
-          } else {
-            window.postMessage({
-              source: "wplace-position-request",
-              position: [parseInt(positionX[1], 10), parseInt(positionY[1], 10)],
-              chunk: [Number(chunkX2), parseInt(chunkY2[1], 10)]
-            });
-          }
-        }
-        if (!matchPattern("https://backend.wplace.live/files/s0/tiles/*/*.png", route)) {
-          return response;
-        }
-        const currentRequestId = Math.random().toString(36);
-        const urlParts = route.split("/");
-        let chunkY = urlParts.pop();
-        chunkY = chunkY.substring(0, chunkY.length - 4);
-        const chunkX = urlParts.pop();
-        window.postMessage({
-          requestId: currentRequestId,
-          source: "wplace-tile-request",
-          blob: await originalResponse.blob(),
-          chunk: [Number(chunkX), Number(chunkY)]
-        });
-        return new Promise((resolve) => {
-          BlobQueue.set(currentRequestId, (blob) => {
-            resolve(
-              new Response(blob, {
-                headers: originalResponse.headers,
-                status: originalResponse.status,
-                statusText: originalResponse.statusText
-              })
-            );
-          });
-        });
-      };
-    }
-    const originalFetch = window.fetch;
-    window.fetch = createFetch(originalFetch);
-  });
   log("wplace.live Template Manager successfully loaded.");
   async function main() {
     const body = await awaitElement("body");
@@ -16639,7 +16613,7 @@
 ;
 (function(){
                     const el = document.createElement("style");
-                    el.innerText = ".OverlayList {\r\n    display: flex;\r\n    flex-direction: column;\r\n}\r\n\r\n.OverlayList > button {\r\n    padding: 8px;\r\n    margin-top: 6px;\r\n}\r\n\r\n.OverlayListEntry {\r\n    display: flex;\r\n    flex-direction: row;\r\n    justify-content: space-between;\r\n    align-items: center;\r\n    width: 100%;\r\n    min-width: 24rem;\r\n    gap: 1.5rem;\r\n    height: 2.5rem;\r\n}\r\n\r\n.OverlayList span {\r\n    max-width: 10rem;\r\n    overflow: hidden;\r\n    text-overflow: ellipsis;\r\n    white-space: nowrap;\r\n    min-width: 2.5rem;\r\n}\r\n\r\n.OverlayListEntry > div > img {\r\n    max-width: 2.5rem;\r\n    max-height: 2.5rem;\r\n    border-radius: 100%;\r\n}\r\n\r\n.coordinate-display {\r\n    width: 3rem;\r\n}\r\n\r\n.coordinates {\r\n    display: none !important;\r\n}\r\n\r\n@media only screen and (min-width: 575px) {\r\n    .coordinates {\r\n        display: flex !important;\r\n    }\r\n}.Overlay {\r\n    position: fixed;\r\n    display: flex;\r\n    flex-direction: column;\r\n    pointer-events: all;\r\n    gap: 1rem;\r\n    flex-grow: 0;\r\n    flex-wrap: nowrap;\r\n    overflow: auto;\r\n    width: 100vw;\r\n    bottom: 0;\r\n    left: 0;\r\n    border-radius: var(--radius-box);\r\n    border-bottom-left-radius: 0;\r\n    border-bottom-right-radius: 0;\r\n}\r\n\r\n.Overlay > nav {\r\n    display: flex;\r\n    flex-direction: row;\r\n    justify-content: space-between;\r\n    gap: 1rem;\r\n}\r\n\r\n.Overlay h1 {\r\n    max-width: 20rem;\r\n    overflow: hidden;\r\n    text-overflow: ellipsis;\r\n    white-space: nowrap;\r\n}\r\n\r\n.Overlay > nav > div {\r\n    display: flex;\r\n    flex-direction: row;\r\n    gap: 1rem;\r\n}\r\n\r\n.Overlay > nav > div > button > img {\r\n    width: 1rem;\r\n    height: 1rem;\r\n}\r\n\r\n.Overlay input[type=\"number\"] {\r\n    width: 3.5rem;\r\n}\r\n\r\n@media only screen and (min-width: 835px) {\r\n    .Overlay {\r\n        top: 10px;\r\n        right: 80px;\r\n        left: unset;\r\n        height: max-content;\r\n        width: max-content;\r\n        max-width: 80vw;\r\n        max-height: 90vh;\r\n        border-radius: var(--radius-box);\r\n    }\r\n\r\n    .mobile-only {\r\n        display: none !important;\r\n    }\r\n}.App {\r\n    position: absolute;\r\n    top: 0;\r\n    left: 0;\r\n    right: 0;\r\n    bottom: 0;\r\n    height: 100vh;\r\n    width: 100vw;\r\n    z-index: 1000 ;\r\n    pointer-events: none;\r\n}\r\n\r\n@media only screen and (min-width: 835px) {\r\n    .App {\r\n        z-index: 10;\r\n    }\r\n}\r\n\r\n.App-logo {\r\n    height: 40vmin;\r\n}\r\n.App-link {\r\n    color: #09d3ac;\r\n}\r\n\r\n.Overlay h1 {\r\n    font-size: 16pt;\r\n    font-weight: bold;\r\n}\r\n\r\n.Overlay .row {\r\n    display: flex;\r\n    flex-direction: row;\r\n    width: 100%;\r\n    justify-content: space-between;\r\n    flex-wrap: wrap;\r\n    flex-grow: 0;\r\n    align-items: center;\r\n    gap: 8px;\r\n}\r\n\r\n.Overlay .column {\r\n    display: flex;\r\n    flex-direction: column;\r\n    height: 100%;\r\n    justify-content: center;\r\n    align-items: center;\r\n    gap: 8px;\r\n}\r\n\r\n.groupRow {\r\n    display: flex;\r\n    flex-direction: row;\r\n    gap: 0.5rem;\r\n    align-items: center;\r\n}\r\n\r\n.ColorCheckbox {\r\n    display: flex;\r\n    flex-direction: column;\r\n    align-items: center;\r\n    position: relative;\r\n    cursor: pointer;\r\n}\r\n\r\n.icon {\r\n    width: 1rem;\r\n    height: 1rem;\r\n    cursor: pointer;\r\n}\r\n\r\n.ColorCheckbox input[type=\"checkbox\"] {\r\n    -webkit-appearance: none;\r\n    -moz-appearance: none;\r\n    appearance: none;\r\n    width: 20px;\r\n    height: 20px;\r\n    border: 2px solid #ccc;\r\n    border-radius: 4px;\r\n    cursor: pointer;\r\n    position: relative;\r\n    margin: 0;\r\n}\r\n\r\n.ColorCheckbox input[type=\"checkbox\"]:checked {\r\n    border-color: #666;\r\n}\r\n\r\n.ColorCheckbox input[type=\"checkbox\"]:checked::before {\r\n    content: '✓';\r\n    position: absolute;\r\n    color: white;\r\n    font-size: 16px;\r\n    left: 50%;\r\n    top: 50%;\r\n    transform: translate(-50%, -50%);\r\n    text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);\r\n}\r\n\r\n.ColorCheckbox span {\r\n    visibility: hidden;\r\n    background-color: rgba(0, 0, 0, 0.8);\r\n    color: white;\r\n    text-align: center;\r\n    padding: 4px 8px;\r\n    border-radius: 4px;\r\n    position: absolute;\r\n    z-index: 1;\r\n    bottom: 125%;\r\n    left: 50%;\r\n    transform: translateX(-50%);\r\n    white-space: nowrap;\r\n    font-size: 14px;\r\n    pointer-events: none;\r\n}\r\n\r\n.ColorCheckbox span::after {\r\n    content: \"\";\r\n    position: absolute;\r\n    top: 100%;\r\n    left: 50%;\r\n    margin-left: -5px;\r\n    border-width: 5px;\r\n    border-style: solid;\r\n    border-color: rgba(0, 0, 0, 0.8) transparent transparent transparent;\r\n}\r\n\r\n.ColorCheckbox input[type=\"checkbox\"]:hover + span {\r\n    visibility: visible;\r\n}\r\n\r\n.FileInput {\r\n    display: flex;\r\n    flex-direction: row;\r\n    align-items: center;\r\n    justify-content: center;\r\n    text-align: center;\r\n}\r\n\r\n.FileInput > input::file-selector-button {\r\n    display: none;\r\n}\r\n\r\n.FileInput > input[type=file] {\r\n    height: auto;\r\n    width: min-content;\r\n}\r\n\r\n.Overlay .icon path {\r\n    fill: var(--color-base-content);;\r\n    stroke: var(--color-base-content);;\r\n}\r\n\r\n#imagePreview {\r\n    min-height: 4rem;\r\n    max-height: 12rem;\r\n}\r\n\r\n.Overlay details {\r\n    user-select: none;\r\n    display: flex;\r\n    flex-direction: column;\r\n    gap: 0.5rem;\r\n}\r\n\r\n.Overlay summary {\r\n    display: flex;\r\n    cursor: pointer;\r\n}\r\n\r\n.Overlay summary::-webkit-details-marker {\r\n    display: none;\r\n}\r\n\r\n.Overlay tr {\r\n    width: 100%;\r\n    display: flex;\r\n    flex-direction: row;\r\n    justify-content: space-between;\r\n    align-items: center;\r\n    gap: 1rem;\r\n}\r\n\r\n.Overlay .input {\r\n    max-width: max-content;\r\n}\r\n\r\n.Grid {\r\n    display: grid;\r\n    grid-template-columns: repeat(6, 2rem);\r\n    gap: 8px;\r\n}\r\n\r\n@media only screen and (min-width: 350px) {\r\n    .Overlay {\r\n        .Grid {\r\n            grid-template-columns: repeat(8, 2rem);\r\n        }\r\n    }\r\n}\r\n\r\n@media only screen and (min-width: 580px) {\r\n    .Overlay {\r\n        .Grid {\r\n            grid-template-columns: repeat(14, 2rem);\r\n        }\r\n    }\r\n\r\n    .desktop-auto {\r\n        max-width: unset !important;\r\n    }\r\n}\r\n\r\n.Overlay h2 {\r\n    font-size: 14pt;\r\n    font-weight: bold;\r\n}\r\n\r\n.Overlay img {\r\n    image-rendering: pixelated;\r\n}\r\n\r\n.Overlay ul {\r\n    list-style-type: circle;\r\n    display: flex;\r\n    flex-direction: column;\r\n    gap: 0.5rem;\r\n    align-items: flex-start;\r\n}";
+                    el.innerText = ".OverlayList {\n    display: flex;\n    flex-direction: column;\n}\n\n.OverlayList > button {\n    padding: 8px;\n    margin-top: 6px;\n}\n\n.OverlayListEntry {\n    display: flex;\n    flex-direction: row;\n    justify-content: space-between;\n    align-items: center;\n    width: 100%;\n    min-width: 24rem;\n    gap: 1.5rem;\n    height: 2.5rem;\n}\n\n.OverlayList span {\n    max-width: 10rem;\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n    min-width: 2.5rem;\n}\n\n.OverlayListEntry > div > img {\n    max-width: 2.5rem;\n    max-height: 2.5rem;\n    border-radius: 100%;\n}\n\n.coordinate-display {\n    width: 3rem;\n}\n\n.coordinates {\n    display: none !important;\n}\n\n@media only screen and (min-width: 575px) {\n    .coordinates {\n        display: flex !important;\n    }\n}.Overlay {\n    position: fixed;\n    display: flex;\n    flex-direction: column;\n    pointer-events: all;\n    gap: 1rem;\n    flex-grow: 0;\n    flex-wrap: nowrap;\n    overflow: auto;\n    width: 100vw;\n    bottom: 0;\n    left: 0;\n    border-radius: var(--radius-box);\n    border-bottom-left-radius: 0;\n    border-bottom-right-radius: 0;\n}\n\n.Overlay > nav {\n    display: flex;\n    flex-direction: row;\n    justify-content: space-between;\n    gap: 1rem;\n}\n\n.Overlay h1 {\n    max-width: 20rem;\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.Overlay > nav > div {\n    display: flex;\n    flex-direction: row;\n    gap: 1rem;\n}\n\n.Overlay > nav > div > button > img {\n    width: 1rem;\n    height: 1rem;\n}\n\n.Overlay input[type=\"number\"] {\n    width: 3.5rem;\n}\n\n@media only screen and (min-width: 835px) {\n    .Overlay {\n        top: 10px;\n        right: 80px;\n        left: unset;\n        height: max-content;\n        width: max-content;\n        max-width: 80vw;\n        max-height: 90vh;\n        border-radius: var(--radius-box);\n    }\n\n    .mobile-only {\n        display: none !important;\n    }\n}.App {\n    position: absolute;\n    top: 0;\n    left: 0;\n    right: 0;\n    bottom: 0;\n    height: 100vh;\n    width: 100vw;\n    z-index: 1000 ;\n    pointer-events: none;\n}\n\n@media only screen and (min-width: 835px) {\n    .App {\n        z-index: 10;\n    }\n}\n\n.App-logo {\n    height: 40vmin;\n}\n.App-link {\n    color: #09d3ac;\n}\n\n.Overlay h1 {\n    font-size: 16pt;\n    font-weight: bold;\n}\n\n.Overlay .row {\n    display: flex;\n    flex-direction: row;\n    width: 100%;\n    justify-content: space-between;\n    flex-wrap: wrap;\n    flex-grow: 0;\n    align-items: center;\n    gap: 8px;\n}\n\n.Overlay .column {\n    display: flex;\n    flex-direction: column;\n    height: 100%;\n    justify-content: center;\n    align-items: center;\n    gap: 8px;\n}\n\n.groupRow {\n    display: flex;\n    flex-direction: row;\n    gap: 0.5rem;\n    align-items: center;\n}\n\n.ColorCheckbox {\n    display: flex;\n    flex-direction: column;\n    align-items: center;\n    position: relative;\n    cursor: pointer;\n}\n\n.icon {\n    width: 1rem;\n    height: 1rem;\n    cursor: pointer;\n}\n\n.ColorCheckbox input[type=\"checkbox\"] {\n    -webkit-appearance: none;\n    -moz-appearance: none;\n    appearance: none;\n    width: 20px;\n    height: 20px;\n    border: 2px solid #ccc;\n    border-radius: 4px;\n    cursor: pointer;\n    position: relative;\n    margin: 0;\n}\n\n.ColorCheckbox input[type=\"checkbox\"]:checked {\n    border-color: #666;\n}\n\n.ColorCheckbox input[type=\"checkbox\"]:checked::before {\n    content: '✓';\n    position: absolute;\n    color: white;\n    font-size: 16px;\n    left: 50%;\n    top: 50%;\n    transform: translate(-50%, -50%);\n    text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);\n}\n\n.ColorCheckbox span {\n    visibility: hidden;\n    background-color: rgba(0, 0, 0, 0.8);\n    color: white;\n    text-align: center;\n    padding: 4px 8px;\n    border-radius: 4px;\n    position: absolute;\n    z-index: 1;\n    bottom: 125%;\n    left: 50%;\n    transform: translateX(-50%);\n    white-space: nowrap;\n    font-size: 14px;\n    pointer-events: none;\n}\n\n.ColorCheckbox span::after {\n    content: \"\";\n    position: absolute;\n    top: 100%;\n    left: 50%;\n    margin-left: -5px;\n    border-width: 5px;\n    border-style: solid;\n    border-color: rgba(0, 0, 0, 0.8) transparent transparent transparent;\n}\n\n.ColorCheckbox input[type=\"checkbox\"]:hover + span {\n    visibility: visible;\n}\n\n.FileInput {\n    display: flex;\n    flex-direction: row;\n    align-items: center;\n    justify-content: center;\n    text-align: center;\n}\n\n.FileInput > input::file-selector-button {\n    display: none;\n}\n\n.FileInput > input[type=file] {\n    height: auto;\n    width: min-content;\n}\n\n.Overlay .icon path {\n    fill: var(--color-base-content);;\n    stroke: var(--color-base-content);;\n}\n\n#imagePreview {\n    min-height: 4rem;\n    max-height: 12rem;\n}\n\n.Overlay details {\n    user-select: none;\n    display: flex;\n    flex-direction: column;\n    gap: 0.5rem;\n}\n\n.Overlay summary {\n    display: flex;\n    cursor: pointer;\n}\n\n.Overlay summary::-webkit-details-marker {\n    display: none;\n}\n\n.Overlay tr {\n    width: 100%;\n    display: flex;\n    flex-direction: row;\n    justify-content: space-between;\n    align-items: center;\n    gap: 1rem;\n}\n\n.Overlay .input {\n    max-width: max-content;\n}\n\n.Grid {\n    display: grid;\n    grid-template-columns: repeat(6, 2rem);\n    gap: 8px;\n}\n\n@media only screen and (min-width: 350px) {\n    .Overlay {\n        .Grid {\n            grid-template-columns: repeat(8, 2rem);\n        }\n    }\n}\n\n@media only screen and (min-width: 580px) {\n    .Overlay {\n        .Grid {\n            grid-template-columns: repeat(14, 2rem);\n        }\n    }\n\n    .desktop-auto {\n        max-width: unset !important;\n    }\n}\n\n.Overlay h2 {\n    font-size: 14pt;\n    font-weight: bold;\n}\n\n.Overlay img {\n    image-rendering: pixelated;\n}\n\n.Overlay ul {\n    list-style-type: circle;\n    display: flex;\n    flex-direction: column;\n    gap: 0.5rem;\n    align-items: flex-start;\n}";
                     el.type = "text/css";
                     document.head.appendChild(el);
                 })();

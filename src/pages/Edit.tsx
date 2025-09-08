@@ -206,6 +206,7 @@ export const Edit: FC = () => {
                                           height,
                                           width,
                                           templateColors: imageColors!,
+                                          bitmap: null,
                                       }
                                     : {})(),
 

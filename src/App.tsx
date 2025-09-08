@@ -14,7 +14,7 @@ import { createPortal } from "react-dom";
 import { awaitElement } from "./utils/awaitElement";
 
 import "./App.css";
-import { IconContext, PaintBrushHouseholdIcon, PaintBrushIcon } from "@phosphor-icons/react";
+import { IconContext, PaintBrushHouseholdIcon } from "@phosphor-icons/react";
 
 const routes = new Map([
     ["/", <Overview />],
@@ -42,9 +42,7 @@ function App() {
         filesUrlRegex: new RegExp(
             "^https://backend\\.wplace\\.live/files/s\\d+/tiles/(\\d+)/(\\d+)\\.png$",
         ),
-        randomTileUrlRegex: new RegExp(
-            "^https://backend\\.wplace\\.live/s\\d+/tile/random$",
-        )
+        randomTileUrlRegex: new RegExp("^https://backend\\.wplace\\.live/s\\d+/tile/random$"),
     };
 
     useEffect(() => {
@@ -98,12 +96,12 @@ function App() {
                     const jumpResponse = {
                         pixel: {
                             x: sharedData.jumpTo.position[0],
-                            y: sharedData.jumpTo.position[1]
+                            y: sharedData.jumpTo.position[1],
                         },
                         tile: {
                             x: sharedData.jumpTo.chunk[0],
-                            y: sharedData.jumpTo.chunk[1]
-                        }
+                            y: sharedData.jumpTo.chunk[1],
+                        },
                     };
                     sharedData.jumpTo.chunk = null;
                     sharedData.jumpTo.position = null;
