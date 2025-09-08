@@ -80,6 +80,7 @@ export const Create: FC = () => {
                             height,
                             width,
                             hidden: false,
+                            bitmap: null,
                         },
                     ]);
                     navigate("/");

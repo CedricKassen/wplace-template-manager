@@ -78,7 +78,7 @@ export const Import: FC = () => {
                     });
 
                 const dataChunk = textChunks.find(({ keyword }) => keyword === "wplace");
-                const importedData = dataChunk?.text.split(",");
+                const importedData = dataChunk?.text?.split(",");
 
                 if (!importedData) {
                     setNotImportedWarning((prev) => [...prev, `${file.name}: No metadata found!`]);
@@ -185,6 +185,8 @@ export const Import: FC = () => {
                             colorSelection: [],
                             onlyShowSelectedColors: false,
                             templateColors: template.imageColors,
+                            hidden: false,
+                            bitmap: null,
                         })),
                     ]);
                     navigate("/");
