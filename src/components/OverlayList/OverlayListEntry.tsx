@@ -47,9 +47,9 @@ export const OverlayListEntry: FC<{
                 <button
                     onClick={async () => {
                         window.postMessage({
-                            source: "overlay-location-service",
                             chunk,
                             position: [position[0] + width / 2, position[1] + height / 2],
+                            source: "overlay-jump-to",
                         });
                         await sleep(200);
                         awaitElement("button[title='Explore']").then((button) => {
