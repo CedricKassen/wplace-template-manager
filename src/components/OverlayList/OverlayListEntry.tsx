@@ -1,6 +1,7 @@
 import React, { FC, useEffect, useRef } from "react";
 import { useNavigate } from "../Router/navigate";
 import { awaitElement } from "../../utils/awaitElement";
+import { sleep } from "../../utils/sleep";
 import { EyeClosedIcon, EyeIcon, GearIcon, MapPinIcon } from "@phosphor-icons/react";
 
 export const OverlayListEntry: FC<{
@@ -44,12 +45,16 @@ export const OverlayListEntry: FC<{
                     <GearIcon />
                 </button>
                 <button
-                    onClick={() => {
+                    onClick={async () => {
                         window.postMessage({
-                            source: "overlay-location-service",
-                            chunk,
-                            position: [position[0] + width / 2, position[1] + height / 2],
+                            source: "overlay-jump-to",
+                            chunk: { x: chunk[0], y: chunk[1] },
+                            position: {
+                                x: position[0] + Math.trunc(width / 2),
+                                y: position[1] + Math.trunc(height / 2),
+                            },
                         });
+                        await sleep(200);
                         awaitElement("button[title='Explore']").then((button) => {
                             button.dispatchEvent(
                                 new Event("click", { bubbles: true, cancelable: true }),

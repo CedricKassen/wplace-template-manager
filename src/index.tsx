@@ -4,6 +4,7 @@ import { addLocationChangeCallback } from "./utils/addLocationChangeCallback";
 import { log } from "./utils/log";
 import { awaitElement } from "./utils/awaitElement";
 import App from "./App";
+import "./fetchHook";
 
 log("wplace.live Template Manager successfully loaded.");
 
