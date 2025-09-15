@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wplace.live Template Manager
 // @namespace    https://github.com/cedrickassen/wplace-overlay-manager
-// @version      1.8.3
+// @version      1.8.4
 // @homepageURL  https://github.com/CedricKassen/wplace-template-manager
 // @supportURL   https://github.com/CedricKassen/wplace-template-manager/issues
 // @license      MIT
@@ -12130,6 +12130,9 @@
       setRoute(route);
     };
   };
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
   const a$2 = /* @__PURE__ */ new Map([
     [
       "bold",
@@ -12392,12 +12395,16 @@
     ), /* @__PURE__ */ React.createElement("td", { className: "groupRow", style: { gap: "2rem" } }, /* @__PURE__ */ React.createElement("button", { onClick: toggleVisiblity }, isHidden ? /* @__PURE__ */ React.createElement(o$1, null) : /* @__PURE__ */ React.createElement(o$2, null)), /* @__PURE__ */ React.createElement("button", { onClick: () => navigate("/edit/" + name) }, /* @__PURE__ */ React.createElement(o, null)), /* @__PURE__ */ React.createElement(
       "button",
       {
-        onClick: () => {
+        onClick: async () => {
           window.postMessage({
-            source: "overlay-location-service",
-            chunk,
-            position: [position[0] + width / 2, position[1] + height / 2]
+            source: "overlay-jump-to",
+            chunk: { x: chunk[0], y: chunk[1] },
+            position: {
+              x: position[0] + Math.trunc(width / 2),
+              y: position[1] + Math.trunc(height / 2)
+            }
           });
+          await sleep(200);
           awaitElement("button[title='Explore']").then((button) => {
             button.dispatchEvent(
               new Event("click", { bubbles: true, cancelable: true })
@@ -16355,7 +16362,7 @@
       )
     );
   };
-  async function renderSquares(baseBlob, overlays, chunkX, chunkY) {
+  async function renderSquares(overlays, tilesCache, baseBlob, baseBlobEtag, chunk) {
     const CANVAS_SIZE = 1e3;
     const RESCALE_FACTOR = 3;
     const RESCALED_CANVAS_SIZE = CANVAS_SIZE * RESCALE_FACTOR;
@@ -16378,18 +16385,12 @@
     );
     const chunkOverlays = expandedOverlays.filter((overlay) => {
       if (overlay.hidden) return false;
-      const greaterThanMin = chunkX >= overlay.chunk[0] && chunkY >= overlay.chunk[1];
-      const smallerThanMax = chunkX <= overlay.toChunkX && chunkY <= overlay.toChunkY;
+      const greaterThanMin = chunk.x >= overlay.chunk[0] && chunk.y >= overlay.chunk[1];
+      const smallerThanMax = chunk.x <= overlay.toChunkX && chunk.y <= overlay.toChunkY;
       return greaterThanMin && smallerThanMax;
-    });
-    if (chunkOverlays.length === 0)
-      return baseBlob;
-    const renderingCanvas = new CustomCanvas(RESCALED_CANVAS_SIZE);
-    const img = await createImageBitmap(baseBlob);
-    renderingCanvas.ctx.drawImage(img, 0, 0, RESCALED_CANVAS_SIZE, RESCALED_CANVAS_SIZE);
-    for (const overlay of chunkOverlays) {
-      const chunkXIndex = overlay.toChunkX - overlay.chunk[0] - (overlay.toChunkX - chunkX);
-      const chunkYIndex = overlay.toChunkY - overlay.chunk[1] - (overlay.toChunkY - chunkY);
+    }).map((overlay) => {
+      const chunkXIndex = overlay.toChunkX - overlay.chunk[0] - (overlay.toChunkX - chunk.x);
+      const chunkYIndex = overlay.toChunkY - overlay.chunk[1] - (overlay.toChunkY - chunk.y);
       let colorFilter;
       if (overlay.onlyShowSelectedColors) {
         colorFilter = overlay.colorSelection.map((color) => {
@@ -16401,11 +16402,51 @@
           }
         });
       }
-      const templateBitmap = await createTemplateBitmap(overlay.bitmap, RESCALE_FACTOR, colorFilter);
+      return {
+        ...overlay,
+        chunkXIndex,
+        chunkYIndex,
+        colorFilter
+      };
+    });
+    if (chunkOverlays.length === 0) {
+      console.log("tile has no overlay at", chunk);
+      return baseBlob;
+    }
+    const encoder = new TextEncoder();
+    const toHexString = (bytes) => bytes.reduce((str, byte) => str + byte.toString(16).padStart(2, "0"), "");
+    const overlayHashes = await Promise.all(
+      chunkOverlays.map(async (overlay) => {
+        const [imageHashBuffer, colorFilterHashBuffer] = await Promise.all([
+          crypto.subtle.digest("SHA-1", encoder.encode(overlay.image)),
+          overlay.colorFilter ? crypto.subtle.digest("SHA-1", encoder.encode(overlay.colorFilter.join(""))) : Promise.resolve(null)
+        ]);
+        const imageHash = toHexString(new Uint8Array(imageHashBuffer));
+        const colorFilterHash = colorFilterHashBuffer ? toHexString(new Uint8Array(colorFilterHashBuffer)) : "nofilter";
+        return `${overlay.name},${imageHash},${colorFilterHash},${overlay.toChunkX},${overlay.toChunkY},${overlay.chunkXIndex},${overlay.chunkYIndex},${overlay.coordinate[0]},${overlay.coordinate[1]}`;
+      })
+    );
+    const chunkOverlaysHash = overlayHashes.join("|");
+    const tileCacheKey = chunk.x * 1e5 + chunk.y;
+    let cachedTile = tilesCache.get(tileCacheKey) || {};
+    if (cachedTile && cachedTile.baseBlobEtag === baseBlobEtag && cachedTile.overlaysHash === chunkOverlaysHash) {
+      console.log("tile was served from cache at", chunk);
+      return cachedTile.blob;
+    }
+    console.log("rendering overlay to tile at", chunk);
+    const renderingCanvas = new CustomCanvas(RESCALED_CANVAS_SIZE);
+    const img = await createImageBitmap(baseBlob);
+    renderingCanvas.ctx.drawImage(img, 0, 0, RESCALED_CANVAS_SIZE, RESCALED_CANVAS_SIZE);
+    for (const overlay of chunkOverlays) {
+      const templateBitmap = await createTemplateBitmap(
+        overlay.bitmap,
+        RESCALE_FACTOR,
+        overlay.colorFilter
+      );
       renderingCanvas.ctx.drawImage(
         templateBitmap,
-        overlay.coordinate[0] * RESCALE_FACTOR - chunkXIndex * RESCALED_CANVAS_SIZE,
-        overlay.coordinate[1] * RESCALE_FACTOR - chunkYIndex * RESCALED_CANVAS_SIZE,
+        overlay.coordinate[0] * RESCALE_FACTOR - overlay.chunkXIndex * RESCALED_CANVAS_SIZE,
+        overlay.coordinate[1] * RESCALE_FACTOR - overlay.chunkYIndex * RESCALED_CANVAS_SIZE,
         templateBitmap.width,
         templateBitmap.height
       );
@@ -16414,6 +16455,11 @@
       renderingCanvas.canvas.toBlob((b) => resolve(b || baseBlob), "image/png");
     });
     renderingCanvas.destroy();
+    cachedTile.blob = blob;
+    cachedTile.baseBlobEtag = baseBlobEtag;
+    cachedTile.overlaysHash = chunkOverlaysHash;
+    tilesCache.set(tileCacheKey, cachedTile);
+    console.log("redered and cached overlay to tile at", chunk);
     return blob;
   }
   const createTemplateBitmap = async (imageBitmap, pixelSize, colorFilter) => {
@@ -16473,96 +16519,18 @@
     const setPosition = useSetAtom(positionAtom);
     const [buttonPortal, setButtonPortal] = reactExports.useState(null);
     const overlays = useAtomValue(overlayAtom);
-    const sharedData = {
-      overlays,
-      jumpTo: {
-        chunk: null,
-        position: null
-      },
-      pixelUrlRegex: new RegExp(
-        "^https://backend\\.wplace\\.live/s\\d+/pixel/(\\d+)/(\\d+)\\?x=(\\d+)&y=(\\d+)$"
-      ),
-      filesUrlRegex: new RegExp(
-        "^https://backend\\.wplace\\.live/files/s\\d+/tiles/(\\d+)/(\\d+)\\.png$"
-      ),
-      randomTileUrlRegex: new RegExp("^https://backend\\.wplace\\.live/s\\d+/tile/random$")
-    };
     reactExports.useEffect(() => {
-      const originals = {
-        blob: Response.prototype.blob,
-        json: Response.prototype.json,
-        arrayBuffer: Response.prototype.arrayBuffer
-      };
       const handleMessage = (event) => {
-        const { source, chunk, position } = event.data;
-        if (source === "overlay-location-service") {
-          sharedData.jumpTo.position = position;
-          sharedData.jumpTo.chunk = chunk;
+        const { source, chunk, position } = event.data || {};
+        if (source === "overlay-setPosition") {
+          console.log(event.data);
+          setPosition({ position, chunk });
+          event.preventDefault();
         }
       };
       window.addEventListener("message", handleMessage);
-      Response.prototype.blob = async function() {
-        if (!this.url || this.url.length === 0) {
-          return originals.blob.call(this);
-        }
-        if (sharedData.filesUrlRegex.test(this.url)) {
-          const m = sharedData.filesUrlRegex.exec(this.url);
-          if (m) {
-            const [, chunkX, chunkY] = m;
-            const origBlob = await originals.blob.call(this);
-            const overlayBlob = await renderSquares(
-              origBlob,
-              sharedData.overlays,
-              parseInt(chunkX, 10),
-              parseInt(chunkY, 10)
-            );
-            return overlayBlob || origBlob;
-          }
-        }
-        return originals.blob.call(this);
-      };
-      Response.prototype.arrayBuffer = async function() {
-        const blob = await this.blob();
-        return blob.arrayBuffer();
-      };
-      Response.prototype.json = async function() {
-        if (!this.url || this.url.length === 0) {
-          return originals.json.call(this);
-        }
-        if (sharedData.randomTileUrlRegex.test(this.url)) {
-          if (sharedData.jumpTo.chunk && sharedData.jumpTo.position) {
-            const jumpResponse = {
-              pixel: {
-                x: sharedData.jumpTo.position[0],
-                y: sharedData.jumpTo.position[1]
-              },
-              tile: {
-                x: sharedData.jumpTo.chunk[0],
-                y: sharedData.jumpTo.chunk[1]
-              }
-            };
-            sharedData.jumpTo.chunk = null;
-            sharedData.jumpTo.position = null;
-            return jumpResponse;
-          }
-        } else if (sharedData.pixelUrlRegex.test(this.url)) {
-          const m = sharedData.pixelUrlRegex.exec(this.url);
-          if (m) {
-            const [, chunkX, chunkY, positionX, positionY] = m;
-            const chunk = [parseInt(chunkX, 10), parseInt(chunkY, 10)];
-            const position = [parseInt(positionX, 10), parseInt(positionY, 10)];
-            setPosition({ position, chunk });
-          }
-        }
-        return originals.json.call(this);
-      };
-      return () => {
-        window.removeEventListener("message", handleMessage);
-        Response.prototype.blob = originals.blob;
-        Response.prototype.json = originals.json;
-        Response.prototype.arrayBuffer = originals.arrayBuffer;
-      };
-    }, [sharedData]);
+      return () => window.removeEventListener("message", handleMessage);
+    }, []);
     reactExports.useEffect(() => {
       const mutationObserver = new MutationObserver(() => {
         awaitElement(
@@ -16574,6 +16542,25 @@
       mutationObserver.observe(document.body, { childList: true, subtree: true });
       return () => mutationObserver.disconnect();
     }, []);
+    reactExports.useEffect(() => {
+      const handleRenderSquares = async (event) => {
+        const customEvent = event;
+        const { requestId, tilesCache, blob, etag, chunk } = customEvent.detail;
+        const overlayBlob = await renderSquares(overlays, tilesCache, blob, etag, chunk);
+        window.dispatchEvent(
+          new CustomEvent("overlay-render-response", {
+            detail: {
+              requestId,
+              blob: overlayBlob
+            }
+          })
+        );
+      };
+      window.addEventListener("overlay-render-request", handleRenderSquares);
+      return () => {
+        window.removeEventListener("overlay-render-request", handleRenderSquares);
+      };
+    }, [overlays]);
     return /* @__PURE__ */ React.createElement(RouteProvider, { routes }, /* @__PURE__ */ React.createElement(
       o$3.Provider,
       {
@@ -16596,6 +16583,116 @@
       ), showOverlay && /* @__PURE__ */ React.createElement(Outlet, null))
     ));
   }
+  function inject(callback) {
+    const script = document.createElement("script");
+    script.textContent = `(${callback})();`;
+    document.documentElement?.appendChild(script);
+  }
+  inject(() => {
+    console.log("injecting fetchHook...");
+    const sharedData = {
+      tilesCache: /* @__PURE__ */ new Map(),
+      jumpTo: {
+        pixel: null,
+        tile: null
+      },
+      pixelUrlRegex: new RegExp(
+        "^https://backend\\.wplace\\.live/s\\d+/pixel/(\\d+)/(\\d+)\\?x=(\\d+)&y=(\\d+)$"
+      ),
+      filesUrlRegex: new RegExp(
+        "^https://backend\\.wplace\\.live/files/s\\d+/tiles/(\\d+)/(\\d+)\\.png$"
+      ),
+      randomTileUrlRegex: new RegExp("^https://backend\\.wplace\\.live/s\\d+/tile/random$")
+    };
+    window.templateManagerData = sharedData;
+    window.addEventListener("message", (event) => {
+      const { source, chunk, position } = event.data || {};
+      if (source === "overlay-jump-to") {
+        console.log(event.data);
+        sharedData.jumpTo.pixel = position;
+        sharedData.jumpTo.tile = chunk;
+        event.preventDefault();
+      }
+    });
+    const originalFetch = window.fetch;
+    window.fetch = async function(input, init) {
+      const request = new Request(input, init);
+      if (sharedData.randomTileUrlRegex.test(request.url)) {
+        console.log("randomTile request called");
+        if (sharedData.jumpTo.pixel && sharedData.jumpTo.tile) {
+          console.log("randomTile request changed to", sharedData.jumpTo);
+          const jumpResponse = new Response(JSON.stringify(sharedData.jumpTo), {
+            headers: { "Content-Type": "application/json" }
+          });
+          sharedData.jumpTo.pixel = null;
+          sharedData.jumpTo.tile = null;
+          return jumpResponse;
+        }
+      } else if (sharedData.pixelUrlRegex.test(request.url)) {
+        const m = sharedData.pixelUrlRegex.exec(request.url);
+        if (m) {
+          const [, chunkX, chunkY, positionX, positionY] = m;
+          const chunk = { x: parseInt(chunkX, 10), y: parseInt(chunkY, 10) };
+          const position = { x: parseInt(positionX, 10), y: parseInt(positionY, 10) };
+          console.log("pixel request called at", { chunk, position });
+          window.postMessage({
+            source: "overlay-setPosition",
+            chunk,
+            position
+          });
+        }
+      }
+      const response = await originalFetch.call(window, request);
+      if (response.ok && sharedData.filesUrlRegex.test(request.url)) {
+        const m = sharedData.filesUrlRegex.exec(request.url);
+        if (m) {
+          const [, chunkX, chunkY] = m;
+          const origBlob = await response.blob();
+          const chunk = { x: parseInt(chunkX, 10), y: parseInt(chunkY, 10) };
+          console.log("tile image request called at", chunk);
+          let etag = response.headers.get("etag");
+          if (!etag) {
+            const buffer2 = await origBlob.arrayBuffer();
+            const hashBuffer = await crypto.subtle.digest("SHA-1", buffer2);
+            const hashBytes = new Uint8Array(hashBuffer);
+            etag = "";
+            for (let i = 0; i < hashBytes.length; i++) {
+              etag += hashBytes[i].toString(16).padStart(2, "0");
+            }
+          }
+          const overlayBlob = await new Promise((resolve) => {
+            const requestId = Math.random().toString();
+            const handleResponse = (event) => {
+              const customEvent = event;
+              if (customEvent.detail.requestId === requestId) {
+                window.removeEventListener("overlay-render-response", handleResponse);
+                resolve(customEvent.detail.blob);
+              }
+            };
+            window.addEventListener("overlay-render-response", handleResponse);
+            window.dispatchEvent(
+              new CustomEvent("overlay-render-request", {
+                detail: {
+                  requestId,
+                  tilesCache: sharedData.tilesCache,
+                  blob: origBlob,
+                  etag,
+                  chunk
+                }
+              })
+            );
+          });
+          return new Response(overlayBlob, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: response.headers
+          });
+        }
+      }
+      return response;
+    };
+    console.log("injected fetchHook!");
+  });
   log("wplace.live Template Manager successfully loaded.");
   async function main() {
     const body = await awaitElement("body");
