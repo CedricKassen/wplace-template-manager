@@ -1,19 +1,19 @@
+import { Point2D, PixelLocation } from "../../utils/types";
 import React, { FC, useEffect, useRef } from "react";
+import { EyeClosedIcon, EyeIcon, GearIcon, MapPinIcon } from "@phosphor-icons/react";
 import { useNavigate } from "../Router/navigate";
 import { awaitElement } from "../../utils/awaitElement";
 import { sleep } from "../../utils/sleep";
-import { EyeClosedIcon, EyeIcon, GearIcon, MapPinIcon } from "@phosphor-icons/react";
 
 export const OverlayListEntry: FC<{
     image: string;
     name: string;
-    chunk: [number, number];
-    position: [number, number];
+    location: PixelLocation;
     isHidden: boolean;
     toggleVisiblity: () => void;
     height: number;
     width: number;
-}> = ({ name, image, chunk, position, isHidden, toggleVisiblity, width, height }) => {
+}> = ({ name, image, location, isHidden, toggleVisiblity, width, height }) => {
     const navigate = useNavigate();
     const imgRef = useRef<HTMLImageElement>(null);
 
@@ -32,10 +32,10 @@ export const OverlayListEntry: FC<{
                 className={"groupRow coordinates"}
                 style={{ flexGrow: 1, justifyContent: "flex-end" }}
             >
-                <span className={"btn btn-sm coordinate-display"}> {chunk[0]} </span>
-                <span className={"btn btn-sm coordinate-display"}> {chunk[1]} </span>
-                <span className={"btn btn-sm coordinate-display"}> {position[0]} </span>
-                <span className={"btn btn-sm coordinate-display"}> {position[1]} </span>
+                <span className={"btn btn-sm coordinate-display"}> {location.tile.x} </span>
+                <span className={"btn btn-sm coordinate-display"}> {location.tile.y} </span>
+                <span className={"btn btn-sm coordinate-display"}> {location.pixel.x} </span>
+                <span className={"btn btn-sm coordinate-display"}> {location.pixel.y} </span>
             </td>
             <td className={"groupRow"} style={{ gap: "2rem" }}>
                 <button onClick={toggleVisiblity}>
@@ -48,11 +48,11 @@ export const OverlayListEntry: FC<{
                     onClick={async () => {
                         window.postMessage({
                             source: "overlay-jump-to",
-                            chunk: { x: chunk[0], y: chunk[1] },
-                            position: {
-                                x: position[0] + Math.trunc(width / 2),
-                                y: position[1] + Math.trunc(height / 2),
-                            },
+                            tile: location.tile,
+                            pixel: {
+                                x: location.pixel.x + Math.trunc(width / 2),
+                                y: location.pixel.y + Math.trunc(height / 2),
+                            } as Point2D,
                         });
                         await sleep(200);
                         awaitElement("button[title='Explore']").then((button) => {

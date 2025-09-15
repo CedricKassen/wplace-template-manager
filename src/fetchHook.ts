@@ -1,26 +1,17 @@
-import { inject } from "./utils/inject";
-import { CachedTile } from "./utils/renderSquares";
+import {
+    CachedTile,
+    Point2D,
+    TemplateManagerData,
+    TileRenderRequest,
+    TileRenderResponse,
+} from "./utils/types";
 
-export type TemplateManagerData = {
-    tilesCache: Map<number, CachedTile>;
-    jumpTo: {
-        pixel: { x: number; y: number } | null;
-        tile: { x: number; y: number } | null;
-    };
-    pixelUrlRegex: RegExp;
-    filesUrlRegex: RegExp;
-    randomTileUrlRegex: RegExp;
-};
-
-inject(() => {
+export function fetchHook() {
     console.log("injecting fetchHook...");
 
     const sharedData: TemplateManagerData = {
         tilesCache: new Map<number, CachedTile>(),
-        jumpTo: {
-            pixel: null,
-            tile: null,
-        },
+        jumpTo: null,
         pixelUrlRegex: new RegExp(
             "^https://backend\\.wplace\\.live/s\\d+/pixel/(\\d+)/(\\d+)\\?x=(\\d+)&y=(\\d+)$",
         ),
@@ -34,11 +25,13 @@ inject(() => {
     window.templateManagerData = sharedData;
 
     window.addEventListener("message", (event: MessageEvent) => {
-        const { source, chunk, position } = event.data || {};
+        const { source, tile, pixel } = event.data || {};
         if (source === "overlay-jump-to") {
             console.log(event.data);
-            sharedData.jumpTo.pixel = position;
-            sharedData.jumpTo.tile = chunk;
+            sharedData.jumpTo = {
+                pixel,
+                tile,
+            };
             event.preventDefault();
         }
     });
@@ -52,26 +45,25 @@ inject(() => {
 
         if (sharedData.randomTileUrlRegex.test(request.url)) {
             console.log("randomTile request called");
-            if (sharedData.jumpTo.pixel && sharedData.jumpTo.tile) {
+            if (sharedData.jumpTo) {
                 console.log("randomTile request changed to", sharedData.jumpTo);
-                const jumpResponse = new Response(JSON.stringify(sharedData.jumpTo), {
+                const jumpToJson = JSON.stringify(sharedData.jumpTo);
+                sharedData.jumpTo = null;
+                return new Response(jumpToJson, {
                     headers: { "Content-Type": "application/json" },
                 });
-                sharedData.jumpTo.pixel = null;
-                sharedData.jumpTo.tile = null;
-                return jumpResponse;
             }
         } else if (sharedData.pixelUrlRegex.test(request.url)) {
             const m = sharedData.pixelUrlRegex.exec(request.url);
             if (m) {
-                const [, chunkX, chunkY, positionX, positionY] = m;
-                const chunk = { x: parseInt(chunkX, 10), y: parseInt(chunkY, 10) };
-                const position = { x: parseInt(positionX, 10), y: parseInt(positionY, 10) };
-                console.log("pixel request called at", { chunk, position });
+                const [, tileX, tileY, pixelX, pixelY] = m;
+                const tile: Point2D = { x: parseInt(tileX, 10), y: parseInt(tileY, 10) };
+                const pixel: Point2D = { x: parseInt(pixelX, 10), y: parseInt(pixelY, 10) };
+                console.log("pixel location request called at", { tile, pixel });
                 window.postMessage({
                     source: "overlay-setPosition",
-                    chunk,
-                    position,
+                    tile,
+                    pixel,
                 });
             }
         }
@@ -81,10 +73,10 @@ inject(() => {
         if (response.ok && sharedData.filesUrlRegex.test(request.url)) {
             const m = sharedData.filesUrlRegex.exec(request.url);
             if (m) {
-                const [, chunkX, chunkY] = m;
+                const [, tileX, tileY] = m;
                 const origBlob = await response.blob();
-                const chunk = { x: parseInt(chunkX, 10), y: parseInt(chunkY, 10) };
-                console.log("tile image request called at", chunk);
+                const tile: Point2D = { x: parseInt(tileX, 10), y: parseInt(tileY, 10) };
+                console.log("tile image request called at", tile);
 
                 let etag = response.headers.get("etag");
                 // currently there is a misconfiguration in the backend which doesn't allow us to get the response headers
@@ -99,24 +91,25 @@ inject(() => {
                 }
 
                 const overlayBlob = await new Promise<Blob>((resolve) => {
-                    const requestId = Math.random().toString();
+                    const request: TileRenderRequest = {
+                        id: crypto.randomUUID(),
+                        tilesCache: sharedData.tilesCache,
+                        baseBlob: origBlob,
+                        baseBlobEtag: etag,
+                        tile,
+                    };
                     const handleResponse = (event: Event) => {
-                        const customEvent = event as CustomEvent;
-                        if (customEvent.detail.requestId === requestId) {
+                        const customEvent = event as CustomEvent<TileRenderResponse>;
+                        const response = customEvent.detail;
+                        if (response.requestId === request.id) {
                             window.removeEventListener("overlay-render-response", handleResponse);
-                            resolve(customEvent.detail.blob);
+                            resolve(response.blob);
                         }
                     };
                     window.addEventListener("overlay-render-response", handleResponse);
                     window.dispatchEvent(
-                        new CustomEvent("overlay-render-request", {
-                            detail: {
-                                requestId,
-                                tilesCache: sharedData.tilesCache,
-                                blob: origBlob,
-                                etag,
-                                chunk,
-                            },
+                        new CustomEvent<TileRenderRequest>("overlay-render-request", {
+                            detail: request,
                         }),
                     );
                 });
@@ -132,4 +125,4 @@ inject(() => {
     };
 
     console.log("injected fetchHook!");
-});
+}

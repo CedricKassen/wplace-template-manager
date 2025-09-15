@@ -1,4 +1,4 @@
-import { ColorValue } from "../colorMap";
+import { ColorValue } from "./types";
 import { hexToRgb } from "./hexToRgb";
 import { CustomCanvas } from "./CustomCanvas";
 

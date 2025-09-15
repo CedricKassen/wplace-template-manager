@@ -1,6 +1,4 @@
+import { PixelLocation } from "../utils/types";
 import { atom } from "jotai";
 
-export const positionAtom = atom<{ position: number[]; chunk: number[] }>({
-    position: [],
-    chunk: [],
-});
+export const positionAtom = atom<PixelLocation>();

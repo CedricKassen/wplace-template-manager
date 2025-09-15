@@ -1,21 +1,15 @@
-import { Overlay } from "../atoms/overlay";
+import { Overlay, ColorValue, CachedTile, Point2D } from "./types";
 import { base64ToImage } from "./base64ToImage";
-import { ColorValue, FreeColor, FreeColorMap, PaidColor, PaidColorMap } from "../colorMap";
+import { FreeColor, FreeColorMap, PaidColor, PaidColorMap } from "../colorMap";
 import { rgbToHex } from "./rgbToHex";
 import { CustomCanvas } from "./CustomCanvas";
-
-export type CachedTile = {
-    blob: Blob;
-    baseBlobEtag: string;
-    overlaysHash: string;
-};
 
 export async function renderSquares(
     overlays: Overlay[],
     tilesCache: Map<number, CachedTile>,
     baseBlob: Blob,
     baseBlobEtag: string,
-    chunk: { x: number; y: number },
+    chunk: Point2D,
 ): Promise<Blob> {
     const CANVAS_SIZE = 1000;
     const RESCALE_FACTOR = 3; // 3x3 pixel size
@@ -30,16 +24,19 @@ export async function renderSquares(
                 });
             }
 
+            const toChunk: Point2D = {
+                x:
+                    overlay.chunk[0] +
+                    Math.floor((overlay.coordinate[0] + overlay.bitmap.width) / CANVAS_SIZE),
+                y:
+                    overlay.chunk[1] +
+                    Math.floor((overlay.coordinate[1] + overlay.bitmap.height) / CANVAS_SIZE),
+            };
             return {
                 ...overlay,
                 height: overlay.bitmap.height,
                 width: overlay.bitmap.width,
-                toChunkX:
-                    overlay.chunk[0] +
-                    Math.floor((overlay.coordinate[0] + overlay.bitmap.width) / CANVAS_SIZE),
-                toChunkY:
-                    overlay.chunk[1] +
-                    Math.floor((overlay.coordinate[1] + overlay.bitmap.height) / CANVAS_SIZE),
+                toChunk,
             };
         }),
     );
@@ -47,12 +44,14 @@ export async function renderSquares(
         .filter((overlay) => {
             if (overlay.hidden) return false;
             const greaterThanMin = chunk.x >= overlay.chunk[0] && chunk.y >= overlay.chunk[1];
-            const smallerThanMax = chunk.x <= overlay.toChunkX && chunk.y <= overlay.toChunkY;
+            const smallerThanMax = chunk.x <= overlay.toChunk.x && chunk.y <= overlay.toChunk.y;
             return greaterThanMin && smallerThanMax;
         })
         .map((overlay) => {
-            const chunkXIndex = overlay.toChunkX - overlay.chunk[0] - (overlay.toChunkX - chunk.x);
-            const chunkYIndex = overlay.toChunkY - overlay.chunk[1] - (overlay.toChunkY - chunk.y);
+            const chunkIndex: Point2D = {
+                x: overlay.toChunk.x - overlay.chunk[0] - (overlay.toChunk.x - chunk.x),
+                y: overlay.toChunk.y - overlay.chunk[1] - (overlay.toChunk.y - chunk.y),
+            };
 
             let colorFilter: ColorValue[] | undefined;
             if (overlay.onlyShowSelectedColors) {
@@ -68,8 +67,7 @@ export async function renderSquares(
 
             return {
                 ...overlay,
-                chunkXIndex,
-                chunkYIndex,
+                chunkIndex,
                 colorFilter,
             };
         });
@@ -97,7 +95,7 @@ export async function renderSquares(
                 ? toHexString(new Uint8Array(colorFilterHashBuffer))
                 : "nofilter";
 
-            return `${overlay.name},${imageHash},${colorFilterHash},${overlay.toChunkX},${overlay.toChunkY},${overlay.chunkXIndex},${overlay.chunkYIndex},${overlay.coordinate[0]},${overlay.coordinate[1]}`;
+            return `${overlay.name},${imageHash},${colorFilterHash},${overlay.toChunk.x},${overlay.toChunk.y},${overlay.chunkIndex.x},${overlay.chunkIndex.y},${overlay.coordinate[0]},${overlay.coordinate[1]}`;
         }),
     );
 
@@ -105,11 +103,7 @@ export async function renderSquares(
 
     const tileCacheKey = chunk.x * 100_000 + chunk.y;
     let cachedTile = tilesCache.get(tileCacheKey) || ({} as CachedTile);
-    if (
-        cachedTile &&
-        cachedTile.baseBlobEtag === baseBlobEtag &&
-        cachedTile.overlaysHash === chunkOverlaysHash
-    ) {
+    if (cachedTile.baseBlobEtag === baseBlobEtag && cachedTile.overlaysHash === chunkOverlaysHash) {
         console.log("tile was served from cache at", chunk);
         return cachedTile.blob;
     }
@@ -129,8 +123,8 @@ export async function renderSquares(
 
         renderingCanvas.ctx.drawImage(
             templateBitmap,
-            overlay.coordinate[0] * RESCALE_FACTOR - overlay.chunkXIndex * RESCALED_CANVAS_SIZE,
-            overlay.coordinate[1] * RESCALE_FACTOR - overlay.chunkYIndex * RESCALED_CANVAS_SIZE,
+            overlay.coordinate[0] * RESCALE_FACTOR - overlay.chunkIndex.x * RESCALED_CANVAS_SIZE,
+            overlay.coordinate[1] * RESCALE_FACTOR - overlay.chunkIndex.y * RESCALED_CANVAS_SIZE,
             templateBitmap.width,
             templateBitmap.height,
         );
