@@ -1,9 +1,8 @@
-import { Point2D, PixelLocation, PixelJumpRequest, PixelJumpResponse } from "../../utils/types";
+import { PixelLocation, PixelJumpRequest, PixelJumpResponse } from "../../utils/types";
 import React, { FC, useEffect, useRef } from "react";
 import { EyeClosedIcon, EyeIcon, GearIcon, MapPinIcon } from "@phosphor-icons/react";
 import { useNavigate } from "../Router/navigate";
 import { awaitElement } from "../../utils/awaitElement";
-import { sleep } from "../../utils/sleep";
 
 export const OverlayListEntry: FC<{
     image: string;
