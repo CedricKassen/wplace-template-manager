@@ -6,6 +6,7 @@ import {
     TileRenderResponse,
     PixelJumpRequest,
     PixelJumpResponse,
+    PixelLocation,
 } from "./utils/types";
 
 export function fetchHook() {
@@ -57,14 +58,14 @@ export function fetchHook() {
         } else if (sharedData.pixelUrlRegex.test(request.url)) {
             const match = sharedData.pixelUrlRegex.exec(request.url);
             const [, tileX, tileY, pixelX, pixelY] = match!;
-            const tile: Point2D = { x: parseInt(tileX, 10), y: parseInt(tileY, 10) };
-            const pixel: Point2D = { x: parseInt(pixelX, 10), y: parseInt(pixelY, 10) };
-            console.log("pixel location request called at", { tile, pixel });
-            window.postMessage({
-                source: "overlay-setPosition",
-                tile,
-                pixel,
-            });
+            const location: PixelLocation = {
+                pixel: { x: parseInt(pixelX, 10), y: parseInt(pixelY, 10) },
+                tile: { x: parseInt(tileX, 10), y: parseInt(tileY, 10) },
+            };
+            console.log("pixel location request called at", location);
+            window.dispatchEvent(
+                new CustomEvent<PixelLocation>("overlay-setPosition-data", { detail: location }),
+            );
         }
 
         const response = await originalFetch.call(window, request);

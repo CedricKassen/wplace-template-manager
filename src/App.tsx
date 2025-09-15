@@ -1,4 +1,4 @@
-import { TileRenderRequest, TileRenderResponse } from "./utils/types";
+import { PixelLocation, TileRenderRequest, TileRenderResponse } from "./utils/types";
 import React, { useEffect, useState } from "react";
 import { RouteProvider } from "./components/Router/RouteContext";
 import { Outlet } from "./components/Router/Outlet";
@@ -32,18 +32,14 @@ function App() {
     const overlays = useAtomValue(overlayAtom);
 
     useEffect(() => {
-        const handleMessage = (event: MessageEvent) => {
-            const { source, tile, pixel } = event.data || {};
-            if (source === "overlay-setPosition") {
-                console.log(event.data);
-                setPosition({ pixel, tile });
-                event.preventDefault();
-            }
+        const handleData = (event: Event) => {
+            const customEvent = event as CustomEvent<PixelLocation>;
+            const location = customEvent.detail;
+            setPosition(location);
         };
 
-        window.addEventListener("message", handleMessage);
-
-        return () => window.removeEventListener("message", handleMessage);
+        window.addEventListener("overlay-setPosition-data", handleData);
+        return () => window.removeEventListener("overlay-setPosition-data", handleData);
     }, []);
 
     useEffect(() => {
