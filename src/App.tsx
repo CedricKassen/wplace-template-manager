@@ -12,9 +12,9 @@ import { positionAtom } from "./atoms/position";
 import { showOverlayAtom } from "./atoms/showOverlay";
 import { createPortal } from "react-dom";
 import { awaitElement } from "./utils/awaitElement";
+import { IconContext, PaintBrushHouseholdIcon } from "@phosphor-icons/react";
 
 import "./App.css";
-import { IconContext, PaintBrushHouseholdIcon } from "@phosphor-icons/react";
 
 const routes = new Map([
     ["/", <Overview />],
@@ -35,7 +35,6 @@ function App() {
             const { source, chunk, position } = event.data || {};
 
             if (source === "overlay-setPosition") {
-                console.log(event.data);
                 setPosition({ position, chunk });
                 event.preventDefault();
             }

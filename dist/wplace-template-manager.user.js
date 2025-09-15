@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wplace.live Template Manager
 // @namespace    https://github.com/cedrickassen/wplace-overlay-manager
-// @version      1.8.4
+// @version      1.8.5
 // @homepageURL  https://github.com/CedricKassen/wplace-template-manager
 // @supportURL   https://github.com/CedricKassen/wplace-template-manager/issues
 // @license      MIT
@@ -13317,8 +13317,8 @@
     );
   };
   const positionAtom = atom({
-    position: [],
-    chunk: []
+    position: { x: void 0, y: void 0 },
+    chunk: { x: void 0, y: void 0 }
   });
   const CoordinateForm = ({ chunkValue, coordinateValue, setChunkValue, setCoordinateValue, hidePostitionButton }) => {
     const [position] = useAtom(positionAtom);
@@ -13359,9 +13359,9 @@
       {
         className: "btn btn-md",
         onClick: () => {
-          if (position.position.length && position.chunk.length) {
-            setChunkValue(position.chunk);
-            setCoordinateValue(position.position);
+          if (position.position.x && position.chunk.x && position.position.y && position.chunk.y) {
+            setChunkValue([position.chunk.x, position.chunk.y]);
+            setCoordinateValue([position.position.x, position.position.y]);
           }
         }
       },
@@ -16523,7 +16523,6 @@
       const handleMessage = (event) => {
         const { source, chunk, position } = event.data || {};
         if (source === "overlay-setPosition") {
-          console.log(event.data);
           setPosition({ position, chunk });
           event.preventDefault();
         }
@@ -16634,7 +16633,7 @@
           const [, chunkX, chunkY, positionX, positionY] = m;
           const chunk = { x: parseInt(chunkX, 10), y: parseInt(chunkY, 10) };
           const position = { x: parseInt(positionX, 10), y: parseInt(positionY, 10) };
-          console.log("pixel request called at", { chunk, position });
+          console.log("pixel request called at", chunk, position);
           window.postMessage({
             source: "overlay-setPosition",
             chunk,

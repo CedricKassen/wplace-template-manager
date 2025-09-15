@@ -64,9 +64,14 @@ export const CoordinateForm: FC<{
                 <button
                     className={"btn btn-md"}
                     onClick={() => {
-                        if (position.position.length && position.chunk.length) {
-                            setChunkValue(position.chunk as [number, number]);
-                            setCoordinateValue(position.position as [number, number]);
+                        if (
+                            position.position.x &&
+                            position.chunk.x &&
+                            position.position.y &&
+                            position.chunk.y
+                        ) {
+                            setChunkValue([position.chunk.x, position.chunk.y]);
+                            setCoordinateValue([position.position.x, position.position.y]);
                         }
                     }}
                 >

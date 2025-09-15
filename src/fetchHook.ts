@@ -67,7 +67,7 @@ inject(() => {
                 const [, chunkX, chunkY, positionX, positionY] = m;
                 const chunk = { x: parseInt(chunkX, 10), y: parseInt(chunkY, 10) };
                 const position = { x: parseInt(positionX, 10), y: parseInt(positionY, 10) };
-                console.log("pixel request called at", { chunk, position });
+                console.log("pixel request called at", chunk, position);
                 window.postMessage({
                     source: "overlay-setPosition",
                     chunk,
