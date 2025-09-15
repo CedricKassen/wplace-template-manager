@@ -1,4 +1,4 @@
-import { Point2D, PixelLocation } from "../../utils/types";
+import { Point2D, PixelLocation, PixelJumpRequest, PixelJumpResponse } from "../../utils/types";
 import React, { FC, useEffect, useRef } from "react";
 import { EyeClosedIcon, EyeIcon, GearIcon, MapPinIcon } from "@phosphor-icons/react";
 import { useNavigate } from "../Router/navigate";
@@ -21,6 +21,35 @@ export const OverlayListEntry: FC<{
         if (!imgRef.current) return;
         imgRef.current!.src = "data:image/bmp;base64," + image;
     }, [image]);
+
+    async function sendJumpRequest() {
+        return new Promise<void>((resolve) => {
+            const request: PixelJumpRequest = {
+                id: crypto.randomUUID(),
+                location: {
+                    tile: location.tile,
+                    pixel: {
+                        x: location.pixel.x + Math.trunc(width / 2),
+                        y: location.pixel.y + Math.trunc(height / 2),
+                    },
+                },
+            };
+            const handleResponse = (event: Event) => {
+                const customEvent = event as CustomEvent<PixelJumpResponse>;
+                const response = customEvent.detail;
+                if (response.requestId === request.id) {
+                    window.removeEventListener("overlay-jump-response", handleResponse);
+                    resolve();
+                }
+            };
+            window.addEventListener("overlay-jump-response", handleResponse);
+            window.dispatchEvent(
+                new CustomEvent<PixelJumpRequest>("overlay-jump-request", {
+                    detail: request,
+                }),
+            );
+        });
+    }
 
     return (
         <tr>
@@ -45,20 +74,13 @@ export const OverlayListEntry: FC<{
                     <GearIcon />
                 </button>
                 <button
-                    onClick={async () => {
-                        window.postMessage({
-                            source: "overlay-jump-to",
-                            tile: location.tile,
-                            pixel: {
-                                x: location.pixel.x + Math.trunc(width / 2),
-                                y: location.pixel.y + Math.trunc(height / 2),
-                            } as Point2D,
-                        });
-                        await sleep(200);
-                        awaitElement("button[title='Explore']").then((button) => {
-                            button.dispatchEvent(
-                                new Event("click", { bubbles: true, cancelable: true }),
-                            );
+                    onClick={() => {
+                        sendJumpRequest().then(() => {
+                            awaitElement("button[title='Explore']").then((button) => {
+                                button.dispatchEvent(
+                                    new Event("click", { bubbles: true, cancelable: true }),
+                                );
+                            });
                         });
                     }}
                 >

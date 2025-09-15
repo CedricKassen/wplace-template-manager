@@ -4,6 +4,8 @@ import {
     TemplateManagerData,
     TileRenderRequest,
     TileRenderResponse,
+    PixelJumpRequest,
+    PixelJumpResponse,
 } from "./utils/types";
 
 export function fetchHook() {
@@ -24,16 +26,15 @@ export function fetchHook() {
     // @ts-ignore
     window.templateManagerData = sharedData;
 
-    window.addEventListener("message", (event: MessageEvent) => {
-        const { source, tile, pixel } = event.data || {};
-        if (source === "overlay-jump-to") {
-            console.log(event.data);
-            sharedData.jumpTo = {
-                pixel,
-                tile,
-            };
-            event.preventDefault();
-        }
+    window.addEventListener("overlay-jump-request", (event: Event) => {
+        const customEvent = event as CustomEvent<PixelJumpRequest>;
+        const request = customEvent.detail;
+        sharedData.jumpTo = request.location;
+        window.dispatchEvent(
+            new CustomEvent<PixelJumpResponse>("overlay-jump-response", {
+                detail: { requestId: request.id },
+            }),
+        );
     });
 
     const originalFetch = window.fetch;

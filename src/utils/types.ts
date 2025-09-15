@@ -53,3 +53,12 @@ export type TileRenderResponse = {
     requestId: string;
     blob: Blob;
 };
+
+export type PixelJumpRequest = {
+    id: string;
+    location: PixelLocation;
+};
+
+export type PixelJumpResponse = {
+    requestId: string;
+};
