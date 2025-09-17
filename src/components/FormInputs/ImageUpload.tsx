@@ -1,11 +1,10 @@
+import { Color, ColorValue } from "../../utils/types";
 import React, { Dispatch, FC, SetStateAction, useEffect, useRef, useState } from "react";
 import { ColorPicker } from "../ColorPicker/ColorPicker";
 import { imageToBase64 } from "../../utils/imageToBase64";
 import { getColorsFromImage } from "../../utils/getColorsFromImage";
 import { optimizeColors } from "../../utils/optimizeColors";
 import {
-    Color,
-    ColorValue,
     FreeColor,
     FreeColorMap,
     PaidColor,

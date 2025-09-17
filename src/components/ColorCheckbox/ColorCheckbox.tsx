@@ -1,6 +1,7 @@
+import { Color } from "../../utils/types"
 import { formatString } from "../../utils/formatString";
 import React, { ChangeEvent, FC } from "react";
-import { Color, FreeColor, PaidColor } from "../../colorMap";
+import { FreeColor, PaidColor } from "../../colorMap";
 
 export const ColorCheckbox: FC<{
     checked?: boolean;

@@ -78,6 +78,3 @@ export const InvertedFreeColorMap = new Map<FreeColor, keyof typeof FreeColor>(
 export const InvertedPaidColorMap = new Map<PaidColor, keyof typeof PaidColor>(
     PaidColorEntries.map(([first, second]) => [second, first]),
 );
-
-export type Color = keyof typeof FreeColor | keyof typeof PaidColor;
-export type ColorValue = FreeColor | PaidColor;

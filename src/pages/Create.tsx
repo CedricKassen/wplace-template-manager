@@ -1,9 +1,9 @@
+import { Color } from "../utils/types";
 import React, { FC, useEffect, useState } from "react";
 import { Overlay } from "../components/Overlay/Overlay";
 import { useNavigate } from "../components/Router/navigate";
 import { useAtom } from "jotai";
 import { overlayAtom } from "../atoms/overlay";
-import { Color } from "../colorMap";
 import { CoordinateForm } from "../components/FormInputs/CoordinateForm";
 import { ImageUpload } from "../components/FormInputs/ImageUpload";
 

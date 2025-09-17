@@ -1,3 +1,4 @@
+import { Color } from "../../utils/types"
 import React, {
     ChangeEvent,
     Dispatch,
@@ -7,7 +8,7 @@ import React, {
     useState,
     useEffect,
 } from "react";
-import { Color, FreeColor, FreeColorMap, PaidColor, PaidColorMap } from "../../colorMap";
+import { FreeColor, FreeColorMap, PaidColor, PaidColorMap } from "../../colorMap";
 import { formatString } from "../../utils/formatString";
 import { ColorCheckbox } from "../ColorCheckbox/ColorCheckbox";
 

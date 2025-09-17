@@ -1,3 +1,4 @@
+import { Color } from "../utils/types"
 import React, { createRef, FC, useEffect, useRef, useState } from "react";
 import { Overlay } from "../components/Overlay/Overlay";
 import { useNavigate } from "../components/Router/navigate";
@@ -8,7 +9,6 @@ import { getColorsFromImage } from "../utils/getColorsFromImage";
 import { imageToBase64 } from "../utils/imageToBase64";
 import { useAtom } from "jotai/index";
 import { overlayAtom } from "../atoms/overlay";
-import { Color } from "../colorMap";
 
 const ImportTableRow: FC<{
     image: string;

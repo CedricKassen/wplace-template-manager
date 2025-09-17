@@ -1,3 +1,4 @@
+import { Color } from "../utils/types";
 import React, { FC, useEffect, useMemo, useRef, useState } from "react";
 import { Overlay } from "../components/Overlay/Overlay";
 import { useParam } from "../components/Router/useParam";
@@ -10,7 +11,6 @@ import encode from "png-chunks-encode";
 import extract from "png-chunks-extract";
 import { Buffer } from "buffer";
 import { ColorPicker } from "../components/ColorPicker/ColorPicker";
-import { Color } from "../colorMap";
 import { CoordinateForm } from "../components/FormInputs/CoordinateForm";
 import { ImageUpload } from "../components/FormInputs/ImageUpload";
 
