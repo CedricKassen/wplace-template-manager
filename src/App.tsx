@@ -1,3 +1,4 @@
+import { PixelLocation, TileRenderRequest, TileRenderResponse } from "./utils/types";
 import React, { useEffect, useState } from "react";
 import { RouteProvider } from "./components/Router/RouteContext";
 import { Outlet } from "./components/Router/Outlet";
@@ -31,18 +32,14 @@ function App() {
     const overlays = useAtomValue(overlayAtom);
 
     useEffect(() => {
-        const handleMessage = (event: MessageEvent) => {
-            const { source, chunk, position } = event.data || {};
-
-            if (source === "overlay-setPosition") {
-                setPosition({ position, chunk });
-                event.preventDefault();
-            }
+        const handleData = (event: Event) => {
+            const customEvent = event as CustomEvent<PixelLocation>;
+            const location = customEvent.detail;
+            setPosition(location);
         };
 
-        window.addEventListener("message", handleMessage);
-
-        return () => window.removeEventListener("message", handleMessage);
+        window.addEventListener("overlay-setPosition-data", handleData);
+        return () => window.removeEventListener("overlay-setPosition-data", handleData);
     }, []);
 
     useEffect(() => {
@@ -59,27 +56,30 @@ function App() {
     }, []);
 
     useEffect(() => {
-        const handleRenderSquares = async (event: Event) => {
-            const customEvent = event as CustomEvent;
-            const { requestId, tilesCache, blob, etag, chunk } = customEvent.detail;
+        const handleRenderRequest = async (event: Event) => {
+            const customEvent = event as CustomEvent<TileRenderRequest>;
+            const request = customEvent.detail;
 
-            const overlayBlob = await renderSquares(overlays, tilesCache, blob, etag, chunk);
+            const blob = await renderSquares(
+                overlays,
+                request.tilesCache,
+                request.baseBlob,
+                request.baseBlobEtag,
+                request.tile,
+            );
 
             window.dispatchEvent(
-                new CustomEvent("overlay-render-response", {
+                new CustomEvent<TileRenderResponse>("overlay-render-response", {
                     detail: {
-                        requestId,
-                        blob: overlayBlob,
+                        requestId: request.id,
+                        blob,
                     },
                 }),
             );
         };
 
-        window.addEventListener("overlay-render-request", handleRenderSquares);
-
-        return () => {
-            window.removeEventListener("overlay-render-request", handleRenderSquares);
-        };
+        window.addEventListener("overlay-render-request", handleRenderRequest);
+        return () => window.removeEventListener("overlay-render-request", handleRenderRequest);
     }, [overlays]);
 
     return (

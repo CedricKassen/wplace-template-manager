@@ -1,11 +1,5 @@
-import {
-    Color,
-    ColorValue,
-    FreeColor,
-    InvertedFreeColorMap,
-    InvertedPaidColorMap,
-    PaidColor,
-} from "../colorMap";
+import { Color, ColorValue } from "./types";
+import { FreeColor, InvertedFreeColorMap, InvertedPaidColorMap, PaidColor } from "../colorMap";
 import { rgbToHex } from "./rgbToHex";
 import { CustomCanvas } from "./CustomCanvas";
 
