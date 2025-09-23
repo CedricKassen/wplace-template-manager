@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wplace.live Template Manager
 // @namespace    https://github.com/cedrickassen/wplace-overlay-manager
-// @version      1.8.5
+// @version      1.9.0
 // @homepageURL  https://github.com/CedricKassen/wplace-template-manager
 // @supportURL   https://github.com/CedricKassen/wplace-template-manager/issues
 // @license      MIT
@@ -12124,15 +12124,6 @@
     const { route } = reactExports.useContext(RouteContext);
     return /* @__PURE__ */ React.createElement(React.Fragment, null, route);
   };
-  const useNavigate = () => {
-    const { setRoute } = reactExports.useContext(RouteContext);
-    return (route) => {
-      setRoute(route);
-    };
-  };
-  function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
   const a$2 = /* @__PURE__ */ new Map([
     [
       "bold",
@@ -12375,40 +12366,67 @@
   a.displayName = "MapPinIcon";
   const e = reactExports.forwardRef((r, s) => /* @__PURE__ */ reactExports.createElement(p, { ref: s, ...r, weights: l }));
   e.displayName = "PaintBrushHouseholdIcon";
-  const OverlayListEntry = ({ name, image, chunk, position, isHidden, toggleVisiblity, width, height }) => {
+  const useNavigate = () => {
+    const { setRoute } = reactExports.useContext(RouteContext);
+    return (route) => {
+      setRoute(route);
+    };
+  };
+  const OverlayListEntry = ({ name, image, location, isHidden, toggleVisiblity, width, height }) => {
     const navigate = useNavigate();
     const imgRef = reactExports.useRef(null);
     reactExports.useEffect(() => {
       if (!imgRef.current) return;
       imgRef.current.src = "data:image/bmp;base64," + image;
     }, [image]);
+    async function sendJumpRequest() {
+      return new Promise((resolve) => {
+        const request = {
+          id: crypto.randomUUID(),
+          location: {
+            tile: location.tile,
+            pixel: {
+              x: location.pixel.x + Math.trunc(width / 2),
+              y: location.pixel.y + Math.trunc(height / 2)
+            }
+          }
+        };
+        const handleResponse = (event) => {
+          const customEvent = event;
+          const response = customEvent.detail;
+          if (response.requestId === request.id) {
+            window.removeEventListener("overlay-jump-response", handleResponse);
+            resolve();
+          }
+        };
+        window.addEventListener("overlay-jump-response", handleResponse);
+        window.dispatchEvent(
+          new CustomEvent("overlay-jump-request", {
+            detail: request
+          })
+        );
+      });
+    }
     return /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { className: "groupRow" }, /* @__PURE__ */ React.createElement("img", { ref: imgRef, alt: "logo", style: { width: "2.5rem" } }), /* @__PURE__ */ React.createElement("span", null, " ", name, " ")), /* @__PURE__ */ React.createElement(
       "td",
       {
         className: "groupRow coordinates",
         style: { flexGrow: 1, justifyContent: "flex-end" }
       },
-      /* @__PURE__ */ React.createElement("span", { className: "btn btn-sm coordinate-display" }, " ", chunk[0], " "),
-      /* @__PURE__ */ React.createElement("span", { className: "btn btn-sm coordinate-display" }, " ", chunk[1], " "),
-      /* @__PURE__ */ React.createElement("span", { className: "btn btn-sm coordinate-display" }, " ", position[0], " "),
-      /* @__PURE__ */ React.createElement("span", { className: "btn btn-sm coordinate-display" }, " ", position[1], " ")
+      /* @__PURE__ */ React.createElement("span", { className: "btn btn-sm coordinate-display" }, " ", location.tile.x, " "),
+      /* @__PURE__ */ React.createElement("span", { className: "btn btn-sm coordinate-display" }, " ", location.tile.y, " "),
+      /* @__PURE__ */ React.createElement("span", { className: "btn btn-sm coordinate-display" }, " ", location.pixel.x, " "),
+      /* @__PURE__ */ React.createElement("span", { className: "btn btn-sm coordinate-display" }, " ", location.pixel.y, " ")
     ), /* @__PURE__ */ React.createElement("td", { className: "groupRow", style: { gap: "2rem" } }, /* @__PURE__ */ React.createElement("button", { onClick: toggleVisiblity }, isHidden ? /* @__PURE__ */ React.createElement(o$1, null) : /* @__PURE__ */ React.createElement(o$2, null)), /* @__PURE__ */ React.createElement("button", { onClick: () => navigate("/edit/" + name) }, /* @__PURE__ */ React.createElement(o, null)), /* @__PURE__ */ React.createElement(
       "button",
       {
-        onClick: async () => {
-          window.postMessage({
-            source: "overlay-jump-to",
-            chunk: { x: chunk[0], y: chunk[1] },
-            position: {
-              x: position[0] + Math.trunc(width / 2),
-              y: position[1] + Math.trunc(height / 2)
-            }
-          });
-          await sleep(200);
-          awaitElement("button[title='Explore']").then((button) => {
-            button.dispatchEvent(
-              new Event("click", { bubbles: true, cancelable: true })
-            );
+        onClick: () => {
+          sendJumpRequest().then(() => {
+            awaitElement("button[title='Explore']").then((button) => {
+              button.dispatchEvent(
+                new Event("click", { bubbles: true, cancelable: true })
+              );
+            });
           });
         }
       },
@@ -13238,14 +13256,23 @@
     };
     const overlaysList = reactExports.useMemo(
       () => overlays.map(({ image, name, chunk, coordinate, hidden, width, height }, index) => {
+        const location = {
+          tile: {
+            x: chunk[0],
+            y: chunk[1]
+          },
+          pixel: {
+            x: coordinate[0],
+            y: coordinate[1]
+          }
+        };
         return /* @__PURE__ */ React.createElement(
           OverlayListEntry,
           {
             name,
             image,
             key: name,
-            chunk,
-            position: coordinate,
+            location,
             isHidden: hidden,
             toggleVisiblity: () => toggleVisibility(hidden, index),
             width,
@@ -13316,10 +13343,7 @@
       )
     );
   };
-  const positionAtom = atom({
-    position: { x: void 0, y: void 0 },
-    chunk: { x: void 0, y: void 0 }
-  });
+  const positionAtom = atom();
   const CoordinateForm = ({ chunkValue, coordinateValue, setChunkValue, setCoordinateValue, hidePostitionButton }) => {
     const [position] = useAtom(positionAtom);
     return /* @__PURE__ */ React.createElement("div", { className: "row", style: { flexWrap: "nowrap" } }, /* @__PURE__ */ React.createElement("div", { className: "row" }, /* @__PURE__ */ React.createElement("label", { className: "input" }, /* @__PURE__ */ React.createElement("span", { className: "label" }, "CX"), /* @__PURE__ */ React.createElement(
@@ -13359,9 +13383,9 @@
       {
         className: "btn btn-md",
         onClick: () => {
-          if (position.position.x && position.chunk.x && position.position.y && position.chunk.y) {
-            setChunkValue([position.chunk.x, position.chunk.y]);
-            setCoordinateValue([position.position.x, position.position.y]);
+          if (position?.pixel && position?.tile) {
+            setChunkValue([position.tile.x, position.tile.y]);
+            setCoordinateValue([position.pixel.x, position.pixel.y]);
           }
         }
       },
@@ -16194,6 +16218,7 @@
     const [startChunk, setStartChunk] = reactExports.useState([]);
     const [startPosition, setStartPosition] = reactExports.useState([]);
     const [selectedColors, setSelectedColors] = reactExports.useState([]);
+    const [confirmDelete, setConfirmDelete] = reactExports.useState(false);
     const [image, setImage] = reactExports.useState();
     const [imageColors, setImageColors] = reactExports.useState();
     const [height, setHeight] = reactExports.useState(0);
@@ -16257,8 +16282,12 @@
     const deleteButton = /* @__PURE__ */ React.createElement(
       "button",
       {
-        className: "btn btn-sm",
+        className: `btn btn-sm ${confirmDelete ? "btn-error" : ""}`,
         onClick: () => {
+          if (!confirmDelete) {
+            setConfirmDelete(true);
+            return;
+          }
           setOverlay([
             ...overlays.slice(0, currentOverlayIndex),
             ...overlays.slice(currentOverlayIndex + 1)
@@ -16266,14 +16295,14 @@
           navigate("/");
         }
       },
-      "Delete"
+      confirmDelete ? "Are you sure?" : "Delete"
     );
     return /* @__PURE__ */ React.createElement(
       Overlay,
       {
         headline: "Edit " + name,
         showBack: true,
-        customRenderer: /* @__PURE__ */ React.createElement("div", null, exportButton, deleteButton)
+        customRenderer: /* @__PURE__ */ React.createElement("div", { className: "row" }, exportButton, deleteButton)
       },
       error && /* @__PURE__ */ React.createElement("div", { className: "error btn btn-md btn-error" }, error),
       /* @__PURE__ */ React.createElement("table", { className: "table max-sm:text-sm" }, /* @__PURE__ */ React.createElement("tbody", null, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement(
@@ -16374,23 +16403,28 @@
             imageOrientation: "from-image"
           });
         }
+        const toChunk = {
+          x: overlay.chunk[0] + Math.floor((overlay.coordinate[0] + overlay.bitmap.width) / CANVAS_SIZE),
+          y: overlay.chunk[1] + Math.floor((overlay.coordinate[1] + overlay.bitmap.height) / CANVAS_SIZE)
+        };
         return {
           ...overlay,
           height: overlay.bitmap.height,
           width: overlay.bitmap.width,
-          toChunkX: overlay.chunk[0] + Math.floor((overlay.coordinate[0] + overlay.bitmap.width) / CANVAS_SIZE),
-          toChunkY: overlay.chunk[1] + Math.floor((overlay.coordinate[1] + overlay.bitmap.height) / CANVAS_SIZE)
+          toChunk
         };
       })
     );
     const chunkOverlays = expandedOverlays.filter((overlay) => {
       if (overlay.hidden) return false;
       const greaterThanMin = chunk.x >= overlay.chunk[0] && chunk.y >= overlay.chunk[1];
-      const smallerThanMax = chunk.x <= overlay.toChunkX && chunk.y <= overlay.toChunkY;
+      const smallerThanMax = chunk.x <= overlay.toChunk.x && chunk.y <= overlay.toChunk.y;
       return greaterThanMin && smallerThanMax;
     }).map((overlay) => {
-      const chunkXIndex = overlay.toChunkX - overlay.chunk[0] - (overlay.toChunkX - chunk.x);
-      const chunkYIndex = overlay.toChunkY - overlay.chunk[1] - (overlay.toChunkY - chunk.y);
+      const chunkIndex = {
+        x: overlay.toChunk.x - overlay.chunk[0] - (overlay.toChunk.x - chunk.x),
+        y: overlay.toChunk.y - overlay.chunk[1] - (overlay.toChunk.y - chunk.y)
+      };
       let colorFilter;
       if (overlay.onlyShowSelectedColors) {
         colorFilter = overlay.colorSelection.map((color) => {
@@ -16404,8 +16438,7 @@
       }
       return {
         ...overlay,
-        chunkXIndex,
-        chunkYIndex,
+        chunkIndex,
         colorFilter
       };
     });
@@ -16423,13 +16456,13 @@
         ]);
         const imageHash = toHexString(new Uint8Array(imageHashBuffer));
         const colorFilterHash = colorFilterHashBuffer ? toHexString(new Uint8Array(colorFilterHashBuffer)) : "nofilter";
-        return `${overlay.name},${imageHash},${colorFilterHash},${overlay.toChunkX},${overlay.toChunkY},${overlay.chunkXIndex},${overlay.chunkYIndex},${overlay.coordinate[0]},${overlay.coordinate[1]}`;
+        return `${overlay.name},${imageHash},${colorFilterHash},${overlay.toChunk.x},${overlay.toChunk.y},${overlay.chunkIndex.x},${overlay.chunkIndex.y},${overlay.coordinate[0]},${overlay.coordinate[1]}`;
       })
     );
     const chunkOverlaysHash = overlayHashes.join("|");
     const tileCacheKey = chunk.x * 1e5 + chunk.y;
     let cachedTile = tilesCache.get(tileCacheKey) || {};
-    if (cachedTile && cachedTile.baseBlobEtag === baseBlobEtag && cachedTile.overlaysHash === chunkOverlaysHash) {
+    if (cachedTile.baseBlobEtag === baseBlobEtag && cachedTile.overlaysHash === chunkOverlaysHash) {
       console.log("tile was served from cache at", chunk);
       return cachedTile.blob;
     }
@@ -16445,8 +16478,8 @@
       );
       renderingCanvas.ctx.drawImage(
         templateBitmap,
-        overlay.coordinate[0] * RESCALE_FACTOR - overlay.chunkXIndex * RESCALED_CANVAS_SIZE,
-        overlay.coordinate[1] * RESCALE_FACTOR - overlay.chunkYIndex * RESCALED_CANVAS_SIZE,
+        overlay.coordinate[0] * RESCALE_FACTOR - overlay.chunkIndex.x * RESCALED_CANVAS_SIZE,
+        overlay.coordinate[1] * RESCALE_FACTOR - overlay.chunkIndex.y * RESCALED_CANVAS_SIZE,
         templateBitmap.width,
         templateBitmap.height
       );
@@ -16520,15 +16553,13 @@
     const [buttonPortal, setButtonPortal] = reactExports.useState(null);
     const overlays = useAtomValue(overlayAtom);
     reactExports.useEffect(() => {
-      const handleMessage = (event) => {
-        const { source, chunk, position } = event.data || {};
-        if (source === "overlay-setPosition") {
-          setPosition({ position, chunk });
-          event.preventDefault();
-        }
+      const handleData = (event) => {
+        const customEvent = event;
+        const location = customEvent.detail;
+        setPosition(location);
       };
-      window.addEventListener("message", handleMessage);
-      return () => window.removeEventListener("message", handleMessage);
+      window.addEventListener("overlay-setPosition-data", handleData);
+      return () => window.removeEventListener("overlay-setPosition-data", handleData);
     }, []);
     reactExports.useEffect(() => {
       const mutationObserver = new MutationObserver(() => {
@@ -16542,23 +16573,27 @@
       return () => mutationObserver.disconnect();
     }, []);
     reactExports.useEffect(() => {
-      const handleRenderSquares = async (event) => {
+      const handleRenderRequest = async (event) => {
         const customEvent = event;
-        const { requestId, tilesCache, blob, etag, chunk } = customEvent.detail;
-        const overlayBlob = await renderSquares(overlays, tilesCache, blob, etag, chunk);
+        const request = customEvent.detail;
+        const blob = await renderSquares(
+          overlays,
+          request.tilesCache,
+          request.baseBlob,
+          request.baseBlobEtag,
+          request.tile
+        );
         window.dispatchEvent(
           new CustomEvent("overlay-render-response", {
             detail: {
-              requestId,
-              blob: overlayBlob
+              requestId: request.id,
+              blob
             }
           })
         );
       };
-      window.addEventListener("overlay-render-request", handleRenderSquares);
-      return () => {
-        window.removeEventListener("overlay-render-request", handleRenderSquares);
-      };
+      window.addEventListener("overlay-render-request", handleRenderRequest);
+      return () => window.removeEventListener("overlay-render-request", handleRenderRequest);
     }, [overlays]);
     return /* @__PURE__ */ React.createElement(RouteProvider, { routes }, /* @__PURE__ */ React.createElement(
       o$3.Provider,
@@ -16582,19 +16617,11 @@
       ), showOverlay && /* @__PURE__ */ React.createElement(Outlet, null))
     ));
   }
-  function inject(callback) {
-    const script = document.createElement("script");
-    script.textContent = `(${callback})();`;
-    document.documentElement?.appendChild(script);
-  }
-  inject(() => {
+  function fetchHook() {
     console.log("injecting fetchHook...");
     const sharedData = {
       tilesCache: /* @__PURE__ */ new Map(),
-      jumpTo: {
-        pixel: null,
-        tile: null
-      },
+      jumpTo: null,
       pixelUrlRegex: new RegExp(
         "^https://backend\\.wplace\\.live/s\\d+/pixel/(\\d+)/(\\d+)\\?x=(\\d+)&y=(\\d+)$"
       ),
@@ -16604,99 +16631,114 @@
       randomTileUrlRegex: new RegExp("^https://backend\\.wplace\\.live/s\\d+/tile/random$")
     };
     window.templateManagerData = sharedData;
-    window.addEventListener("message", (event) => {
-      const { source, chunk, position } = event.data || {};
-      if (source === "overlay-jump-to") {
-        console.log(event.data);
-        sharedData.jumpTo.pixel = position;
-        sharedData.jumpTo.tile = chunk;
-        event.preventDefault();
-      }
+    window.addEventListener("overlay-jump-request", (event) => {
+      const customEvent = event;
+      const request = customEvent.detail;
+      sharedData.jumpTo = request.location;
+      window.dispatchEvent(
+        new CustomEvent("overlay-jump-response", {
+          detail: { requestId: request.id }
+        })
+      );
     });
     const originalFetch = window.fetch;
     window.fetch = async function(input, init) {
       const request = new Request(input, init);
       if (sharedData.randomTileUrlRegex.test(request.url)) {
         console.log("randomTile request called");
-        if (sharedData.jumpTo.pixel && sharedData.jumpTo.tile) {
+        if (sharedData.jumpTo) {
           console.log("randomTile request changed to", sharedData.jumpTo);
-          const jumpResponse = new Response(JSON.stringify(sharedData.jumpTo), {
+          const jumpToJson = JSON.stringify(sharedData.jumpTo);
+          sharedData.jumpTo = null;
+          return new Response(jumpToJson, {
             headers: { "Content-Type": "application/json" }
           });
-          sharedData.jumpTo.pixel = null;
-          sharedData.jumpTo.tile = null;
-          return jumpResponse;
         }
       } else if (sharedData.pixelUrlRegex.test(request.url)) {
-        const m = sharedData.pixelUrlRegex.exec(request.url);
-        if (m) {
-          const [, chunkX, chunkY, positionX, positionY] = m;
-          const chunk = { x: parseInt(chunkX, 10), y: parseInt(chunkY, 10) };
-          const position = { x: parseInt(positionX, 10), y: parseInt(positionY, 10) };
-          console.log("pixel request called at", chunk, position);
-          window.postMessage({
-            source: "overlay-setPosition",
-            chunk,
-            position
-          });
-        }
+        const match = sharedData.pixelUrlRegex.exec(request.url);
+        const [, tileX, tileY, pixelX, pixelY] = match;
+        const location = {
+          pixel: { x: parseInt(pixelX, 10), y: parseInt(pixelY, 10) },
+          tile: { x: parseInt(tileX, 10), y: parseInt(tileY, 10) }
+        };
+        console.log("pixel location request called at", location);
+        window.dispatchEvent(
+          new CustomEvent("overlay-setPosition-data", { detail: location })
+        );
       }
       const response = await originalFetch.call(window, request);
       if (response.ok && sharedData.filesUrlRegex.test(request.url)) {
-        const m = sharedData.filesUrlRegex.exec(request.url);
-        if (m) {
-          const [, chunkX, chunkY] = m;
-          const origBlob = await response.blob();
-          const chunk = { x: parseInt(chunkX, 10), y: parseInt(chunkY, 10) };
-          console.log("tile image request called at", chunk);
-          let etag = response.headers.get("etag");
-          if (!etag) {
-            const buffer2 = await origBlob.arrayBuffer();
-            const hashBuffer = await crypto.subtle.digest("SHA-1", buffer2);
-            const hashBytes = new Uint8Array(hashBuffer);
-            etag = "";
-            for (let i = 0; i < hashBytes.length; i++) {
-              etag += hashBytes[i].toString(16).padStart(2, "0");
-            }
+        const match = sharedData.filesUrlRegex.exec(request.url);
+        const [, tileX, tileY] = match;
+        const origBlob = await response.blob();
+        const tile = { x: parseInt(tileX, 10), y: parseInt(tileY, 10) };
+        console.log("tile image request called at", tile);
+        let etag = response.headers.get("etag");
+        if (!etag) {
+          const buffer2 = await origBlob.arrayBuffer();
+          const hashBuffer = await crypto.subtle.digest("SHA-1", buffer2);
+          const hashBytes = new Uint8Array(hashBuffer);
+          etag = "";
+          for (let i = 0; i < hashBytes.length; i++) {
+            etag += hashBytes[i].toString(16).padStart(2, "0");
           }
-          const overlayBlob = await new Promise((resolve) => {
-            const requestId = Math.random().toString();
-            const handleResponse = (event) => {
-              const customEvent = event;
-              if (customEvent.detail.requestId === requestId) {
-                window.removeEventListener("overlay-render-response", handleResponse);
-                resolve(customEvent.detail.blob);
-              }
-            };
-            window.addEventListener("overlay-render-response", handleResponse);
-            window.dispatchEvent(
-              new CustomEvent("overlay-render-request", {
-                detail: {
-                  requestId,
-                  tilesCache: sharedData.tilesCache,
-                  blob: origBlob,
-                  etag,
-                  chunk
-                }
-              })
-            );
-          });
-          return new Response(overlayBlob, {
-            status: response.status,
-            statusText: response.statusText,
-            headers: response.headers
-          });
         }
+        const overlayBlob = await new Promise((resolve) => {
+          const request2 = {
+            id: crypto.randomUUID(),
+            tilesCache: sharedData.tilesCache,
+            baseBlob: origBlob,
+            baseBlobEtag: etag,
+            tile
+          };
+          const handleResponse = (event) => {
+            const customEvent = event;
+            const response2 = customEvent.detail;
+            if (response2.requestId === request2.id) {
+              window.removeEventListener("overlay-render-response", handleResponse);
+              resolve(response2.blob);
+            }
+          };
+          window.addEventListener("overlay-render-response", handleResponse);
+          window.dispatchEvent(
+            new CustomEvent("overlay-render-request", {
+              detail: request2
+            })
+          );
+        });
+        return new Response(overlayBlob, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers
+        });
       }
       return response;
     };
     console.log("injected fetchHook!");
-  });
+  }
+  function inject(callback, opts = {}) {
+    const { keep = false, debugName = "userscript-injected.js" } = opts;
+    const code = `(${callback})();
+//# sourceURL=${debugName}`;
+    const blob = new Blob([code], { type: "text/javascript" });
+    const url = URL.createObjectURL(blob);
+    const script = document.createElement("script");
+    script.src = url;
+    script.onload = () => {
+      if (!keep) URL.revokeObjectURL(url);
+      script.remove();
+    };
+    (document.head || document.documentElement).appendChild(script);
+    if (!keep) {
+      window.addEventListener("beforeunload", () => URL.revokeObjectURL(url));
+    }
+  }
   log("wplace.live Template Manager successfully loaded.");
   async function main() {
     const body = await awaitElement("body");
     const container = document.createElement("div");
     body.appendChild(container);
+    inject(fetchHook, { keep: false, debugName: "fetchHook.js" });
     const root = clientExports.createRoot(container);
     root.render(/* @__PURE__ */ React.createElement(App, null));
   }
@@ -16709,7 +16751,7 @@
 ;
 (function(){
                     const el = document.createElement("style");
-                    el.innerText = ".OverlayList {\n    display: flex;\n    flex-direction: column;\n}\n\n.OverlayList > button {\n    padding: 8px;\n    margin-top: 6px;\n}\n\n.OverlayListEntry {\n    display: flex;\n    flex-direction: row;\n    justify-content: space-between;\n    align-items: center;\n    width: 100%;\n    min-width: 24rem;\n    gap: 1.5rem;\n    height: 2.5rem;\n}\n\n.OverlayList span {\n    max-width: 10rem;\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n    min-width: 2.5rem;\n}\n\n.OverlayListEntry > div > img {\n    max-width: 2.5rem;\n    max-height: 2.5rem;\n    border-radius: 100%;\n}\n\n.coordinate-display {\n    width: 3rem;\n}\n\n.coordinates {\n    display: none !important;\n}\n\n@media only screen and (min-width: 575px) {\n    .coordinates {\n        display: flex !important;\n    }\n}.Overlay {\n    position: fixed;\n    display: flex;\n    flex-direction: column;\n    pointer-events: all;\n    gap: 1rem;\n    flex-grow: 0;\n    flex-wrap: nowrap;\n    overflow: auto;\n    width: 100vw;\n    bottom: 0;\n    left: 0;\n    border-radius: var(--radius-box);\n    border-bottom-left-radius: 0;\n    border-bottom-right-radius: 0;\n}\n\n.Overlay > nav {\n    display: flex;\n    flex-direction: row;\n    justify-content: space-between;\n    gap: 1rem;\n}\n\n.Overlay h1 {\n    max-width: 20rem;\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.Overlay > nav > div {\n    display: flex;\n    flex-direction: row;\n    gap: 1rem;\n}\n\n.Overlay > nav > div > button > img {\n    width: 1rem;\n    height: 1rem;\n}\n\n.Overlay input[type=\"number\"] {\n    width: 3.5rem;\n}\n\n@media only screen and (min-width: 835px) {\n    .Overlay {\n        top: 10px;\n        right: 80px;\n        left: unset;\n        height: max-content;\n        width: max-content;\n        max-width: 80vw;\n        max-height: 90vh;\n        border-radius: var(--radius-box);\n    }\n\n    .mobile-only {\n        display: none !important;\n    }\n}.App {\n    position: absolute;\n    top: 0;\n    left: 0;\n    right: 0;\n    bottom: 0;\n    height: 100vh;\n    width: 100vw;\n    z-index: 1000 ;\n    pointer-events: none;\n}\n\n@media only screen and (min-width: 835px) {\n    .App {\n        z-index: 10;\n    }\n}\n\n.App-logo {\n    height: 40vmin;\n}\n.App-link {\n    color: #09d3ac;\n}\n\n.Overlay h1 {\n    font-size: 16pt;\n    font-weight: bold;\n}\n\n.Overlay .row {\n    display: flex;\n    flex-direction: row;\n    width: 100%;\n    justify-content: space-between;\n    flex-wrap: wrap;\n    flex-grow: 0;\n    align-items: center;\n    gap: 8px;\n}\n\n.Overlay .column {\n    display: flex;\n    flex-direction: column;\n    height: 100%;\n    justify-content: center;\n    align-items: center;\n    gap: 8px;\n}\n\n.groupRow {\n    display: flex;\n    flex-direction: row;\n    gap: 0.5rem;\n    align-items: center;\n}\n\n.ColorCheckbox {\n    display: flex;\n    flex-direction: column;\n    align-items: center;\n    position: relative;\n    cursor: pointer;\n}\n\n.icon {\n    width: 1rem;\n    height: 1rem;\n    cursor: pointer;\n}\n\n.ColorCheckbox input[type=\"checkbox\"] {\n    -webkit-appearance: none;\n    -moz-appearance: none;\n    appearance: none;\n    width: 20px;\n    height: 20px;\n    border: 2px solid #ccc;\n    border-radius: 4px;\n    cursor: pointer;\n    position: relative;\n    margin: 0;\n}\n\n.ColorCheckbox input[type=\"checkbox\"]:checked {\n    border-color: #666;\n}\n\n.ColorCheckbox input[type=\"checkbox\"]:checked::before {\n    content: '✓';\n    position: absolute;\n    color: white;\n    font-size: 16px;\n    left: 50%;\n    top: 50%;\n    transform: translate(-50%, -50%);\n    text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);\n}\n\n.ColorCheckbox span {\n    visibility: hidden;\n    background-color: rgba(0, 0, 0, 0.8);\n    color: white;\n    text-align: center;\n    padding: 4px 8px;\n    border-radius: 4px;\n    position: absolute;\n    z-index: 1;\n    bottom: 125%;\n    left: 50%;\n    transform: translateX(-50%);\n    white-space: nowrap;\n    font-size: 14px;\n    pointer-events: none;\n}\n\n.ColorCheckbox span::after {\n    content: \"\";\n    position: absolute;\n    top: 100%;\n    left: 50%;\n    margin-left: -5px;\n    border-width: 5px;\n    border-style: solid;\n    border-color: rgba(0, 0, 0, 0.8) transparent transparent transparent;\n}\n\n.ColorCheckbox input[type=\"checkbox\"]:hover + span {\n    visibility: visible;\n}\n\n.FileInput {\n    display: flex;\n    flex-direction: row;\n    align-items: center;\n    justify-content: center;\n    text-align: center;\n}\n\n.FileInput > input::file-selector-button {\n    display: none;\n}\n\n.FileInput > input[type=file] {\n    height: auto;\n    width: min-content;\n}\n\n.Overlay .icon path {\n    fill: var(--color-base-content);;\n    stroke: var(--color-base-content);;\n}\n\n#imagePreview {\n    min-height: 4rem;\n    max-height: 12rem;\n}\n\n.Overlay details {\n    user-select: none;\n    display: flex;\n    flex-direction: column;\n    gap: 0.5rem;\n}\n\n.Overlay summary {\n    display: flex;\n    cursor: pointer;\n}\n\n.Overlay summary::-webkit-details-marker {\n    display: none;\n}\n\n.Overlay tr {\n    width: 100%;\n    display: flex;\n    flex-direction: row;\n    justify-content: space-between;\n    align-items: center;\n    gap: 1rem;\n}\n\n.Overlay .input {\n    max-width: max-content;\n}\n\n.Grid {\n    display: grid;\n    grid-template-columns: repeat(6, 2rem);\n    gap: 8px;\n}\n\n@media only screen and (min-width: 350px) {\n    .Overlay {\n        .Grid {\n            grid-template-columns: repeat(8, 2rem);\n        }\n    }\n}\n\n@media only screen and (min-width: 580px) {\n    .Overlay {\n        .Grid {\n            grid-template-columns: repeat(14, 2rem);\n        }\n    }\n\n    .desktop-auto {\n        max-width: unset !important;\n    }\n}\n\n.Overlay h2 {\n    font-size: 14pt;\n    font-weight: bold;\n}\n\n.Overlay img {\n    image-rendering: pixelated;\n}\n\n.Overlay ul {\n    list-style-type: circle;\n    display: flex;\n    flex-direction: column;\n    gap: 0.5rem;\n    align-items: flex-start;\n}";
+                    el.innerText = ".OverlayList {\n    display: flex;\n    flex-direction: column;\n}\n\n.OverlayList > button {\n    padding: 8px;\n    margin-top: 6px;\n}\n\n.OverlayListEntry {\n    display: flex;\n    flex-direction: row;\n    justify-content: space-between;\n    align-items: center;\n    width: 100%;\n    min-width: 24rem;\n    gap: 1.5rem;\n    height: 2.5rem;\n}\n\n.OverlayList span {\n    max-width: 10rem;\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n    min-width: 2.5rem;\n}\n\n.OverlayListEntry > div > img {\n    max-width: 2.5rem;\n    max-height: 2.5rem;\n    border-radius: 100%;\n}\n\n.coordinate-display {\n    width: 3rem;\n}\n\n.coordinates {\n    display: none !important;\n}\n\n@media only screen and (min-width: 575px) {\n    .coordinates {\n        display: flex !important;\n    }\n}.Overlay {\n    position: fixed;\n    display: flex;\n    flex-direction: column;\n    pointer-events: all;\n    gap: 1rem;\n    flex-grow: 0;\n    flex-wrap: nowrap;\n    overflow: auto;\n    width: 100vw;\n    bottom: 0;\n    left: 0;\n    border-radius: var(--radius-box);\n    border-bottom-left-radius: 0;\n    border-bottom-right-radius: 0;\n}\n\n.Overlay > nav {\n    display: flex;\n    flex-direction: row;\n    justify-content: space-between;\n    gap: 1rem;\n}\n\n.Overlay h1 {\n    max-width: 20rem;\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n}\n\n.Overlay > nav > div {\n    display: flex;\n    flex-direction: row;\n    gap: 1rem;\n}\n\n.Overlay > nav > div > button > img {\n    width: 1rem;\n    height: 1rem;\n}\n\n.Overlay input[type=\"number\"] {\n    width: 3.5rem;\n}\n\n@media only screen and (min-width: 835px) {\n    .Overlay {\n        top: 10px;\n        right: 80px;\n        left: unset;\n        height: max-content;\n        width: max-content;\n        max-width: 80vw;\n        max-height: 90vh;\n        border-radius: var(--radius-box);\n    }\n\n    .mobile-only {\n        display: none !important;\n    }\n}.App {\n    position: absolute;\n    top: 0;\n    left: 0;\n    right: 0;\n    bottom: 0;\n    height: min-content;\n    width: 100vw;\n    z-index: 1000 ;\n    pointer-events: none;\n}\n\n@media only screen and (min-width: 835px) {\n    .App {\n        z-index: 10;\n    }\n}\n\n.App-logo {\n    height: 40vmin;\n}\n.App-link {\n    color: #09d3ac;\n}\n\n.Overlay h1 {\n    font-size: 16pt;\n    font-weight: bold;\n}\n\n.Overlay .row {\n    display: flex;\n    flex-direction: row;\n    width: 100%;\n    justify-content: space-between;\n    flex-wrap: wrap;\n    flex-grow: 0;\n    align-items: center;\n    gap: 8px;\n}\n\n.Overlay .column {\n    display: flex;\n    flex-direction: column;\n    height: 100%;\n    justify-content: center;\n    align-items: center;\n    gap: 8px;\n}\n\n.groupRow {\n    display: flex;\n    flex-direction: row;\n    gap: 0.5rem;\n    align-items: center;\n}\n\n.ColorCheckbox {\n    display: flex;\n    flex-direction: column;\n    align-items: center;\n    position: relative;\n    cursor: pointer;\n}\n\n.icon {\n    width: 1rem;\n    height: 1rem;\n    cursor: pointer;\n}\n\n.ColorCheckbox input[type=\"checkbox\"] {\n    -webkit-appearance: none;\n    -moz-appearance: none;\n    appearance: none;\n    width: 20px;\n    height: 20px;\n    border: 2px solid #ccc;\n    border-radius: 4px;\n    cursor: pointer;\n    position: relative;\n    margin: 0;\n}\n\n.ColorCheckbox input[type=\"checkbox\"]:checked {\n    border-color: #666;\n}\n\n.ColorCheckbox input[type=\"checkbox\"]:checked::before {\n    content: '✓';\n    position: absolute;\n    color: white;\n    font-size: 16px;\n    left: 50%;\n    top: 50%;\n    transform: translate(-50%, -50%);\n    text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);\n}\n\n.ColorCheckbox span {\n    visibility: hidden;\n    background-color: rgba(0, 0, 0, 0.8);\n    color: white;\n    text-align: center;\n    padding: 4px 8px;\n    border-radius: 4px;\n    position: absolute;\n    z-index: 1;\n    bottom: 125%;\n    left: 50%;\n    transform: translateX(-50%);\n    white-space: nowrap;\n    font-size: 14px;\n    pointer-events: none;\n}\n\n.ColorCheckbox span::after {\n    content: \"\";\n    position: absolute;\n    top: 100%;\n    left: 50%;\n    margin-left: -5px;\n    border-width: 5px;\n    border-style: solid;\n    border-color: rgba(0, 0, 0, 0.8) transparent transparent transparent;\n}\n\n.ColorCheckbox input[type=\"checkbox\"]:hover + span {\n    visibility: visible;\n}\n\n.FileInput {\n    display: flex;\n    flex-direction: row;\n    align-items: center;\n    justify-content: center;\n    text-align: center;\n}\n\n.FileInput > input::file-selector-button {\n    display: none;\n}\n\n.FileInput > input[type=file] {\n    height: auto;\n    width: min-content;\n}\n\n.Overlay .icon path {\n    fill: var(--color-base-content);;\n    stroke: var(--color-base-content);;\n}\n\n#imagePreview {\n    min-height: 4rem;\n    max-height: 12rem;\n}\n\n.Overlay details {\n    user-select: none;\n    display: flex;\n    flex-direction: column;\n    gap: 0.5rem;\n}\n\n.Overlay summary {\n    display: flex;\n    cursor: pointer;\n}\n\n.Overlay summary::-webkit-details-marker {\n    display: none;\n}\n\n.Overlay tr {\n    width: 100%;\n    display: flex;\n    flex-direction: row;\n    justify-content: space-between;\n    align-items: center;\n    gap: 1rem;\n}\n\n.Overlay .input {\n    max-width: max-content;\n}\n\n.Grid {\n    display: grid;\n    grid-template-columns: repeat(6, 2rem);\n    gap: 8px;\n}\n\n@media only screen and (min-width: 350px) {\n    .Overlay {\n        .Grid {\n            grid-template-columns: repeat(8, 2rem);\n        }\n    }\n}\n\n@media only screen and (min-width: 580px) {\n    .Overlay {\n        .Grid {\n            grid-template-columns: repeat(14, 2rem);\n        }\n    }\n\n    .desktop-auto {\n        max-width: unset !important;\n    }\n}\n\n.Overlay h2 {\n    font-size: 14pt;\n    font-weight: bold;\n}\n\n.Overlay img {\n    image-rendering: pixelated;\n}\n\n.Overlay ul {\n    list-style-type: circle;\n    display: flex;\n    flex-direction: column;\n    gap: 0.5rem;\n    align-items: flex-start;\n}\n";
                     el.type = "text/css";
                     document.head.appendChild(el);
                 })();

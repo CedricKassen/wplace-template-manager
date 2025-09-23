@@ -20,6 +20,7 @@ export const Edit: FC = () => {
     const [startChunk, setStartChunk] = useState<number[]>([]);
     const [startPosition, setStartPosition] = useState<number[]>([]);
     const [selectedColors, setSelectedColors] = useState<Color[]>([]);
+    const [confirmDelete, setConfirmDelete] = useState<boolean>(false);
 
     const [image, setImage] = useState<string>();
     const [imageColors, setImageColors] = useState<Color[]>();
@@ -95,8 +96,13 @@ export const Edit: FC = () => {
 
     const deleteButton = (
         <button
-            className={"btn btn-sm"}
+            className={`btn btn-sm ${confirmDelete ? "btn-error" : ""}`}
             onClick={() => {
+                if (!confirmDelete) {
+                    setConfirmDelete(true);
+                    return;
+                }
+
                 setOverlay([
                     ...overlays.slice(0, currentOverlayIndex),
                     ...overlays.slice(currentOverlayIndex + 1),
@@ -104,7 +110,7 @@ export const Edit: FC = () => {
                 navigate("/");
             }}
         >
-            Delete
+            {confirmDelete ? "Are you sure?" : "Delete"}
         </button>
     );
 
@@ -113,7 +119,7 @@ export const Edit: FC = () => {
             headline={"Edit " + name}
             showBack
             customRenderer={
-                <div>
+                <div className={"row"}>
                     {exportButton}
                     {deleteButton}
                 </div>
