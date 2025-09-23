@@ -10,6 +10,7 @@
     width: 100vw;
     bottom: 0;
     left: 0;
+    max-height: 70vh;
     border-radius: var(--radius-box);
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
