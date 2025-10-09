@@ -17,6 +17,10 @@ working in groups and on bigger projects with many colors a breeze.
 
 ## Feature Comparison
 
+**wplace.live Template Manager doesn't contain any botting features, and we'll not accept PRs that implement any.
+wplace.live Template Manager will not place any pixels, select the right colors, etc. for you. This is against the
+rules. Everything implemented is only there to show where to place pixels.**
+
 | Feature                         | wplace.live Template Manager | Blue Marble           | WPlace Overlay Pro   |
 |---------------------------------|------------------------------|-----------------------|----------------------|
 | Show Image Template             | ☑️                           | ☑️                    | ☑️                   |
