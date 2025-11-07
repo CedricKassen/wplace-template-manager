@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wplace.live Template Manager
 // @namespace    https://github.com/cedrickassen/wplace-overlay-manager
-// @version      1.9.0
+// @version      1.10.0
 // @homepageURL  https://github.com/CedricKassen/wplace-template-manager
 // @supportURL   https://github.com/CedricKassen/wplace-template-manager/issues
 // @license      MIT
@@ -12422,7 +12422,7 @@
       {
         onClick: () => {
           sendJumpRequest().then(() => {
-            awaitElement("button[title='Explore']").then((button) => {
+            awaitElement("button[data-tip='Random place']").then((button) => {
               button.dispatchEvent(
                 new Event("click", { bubbles: true, cancelable: true })
               );

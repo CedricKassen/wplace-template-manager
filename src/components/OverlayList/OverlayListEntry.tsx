@@ -75,7 +75,7 @@ export const OverlayListEntry: FC<{
                 <button
                     onClick={() => {
                         sendJumpRequest().then(() => {
-                            awaitElement("button[title='Explore']").then((button) => {
+                            awaitElement("button[data-tip='Random place']").then((button) => {
                                 button.dispatchEvent(
                                     new Event("click", { bubbles: true, cancelable: true }),
                                 );
