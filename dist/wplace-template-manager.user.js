@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         wplace.live Template Manager
 // @namespace    https://github.com/cedrickassen/wplace-overlay-manager
-// @version      1.11.0
+// @version      1.11.1
 // @homepageURL  https://github.com/CedricKassen/wplace-template-manager
 // @supportURL   https://github.com/CedricKassen/wplace-template-manager/issues
 // @license      MIT
@@ -13244,7 +13244,84 @@
     );
     return anAtom;
   }
-  const overlayAtom = atomWithStorage("overlays", []);
+  const DB_NAME = "wplace-overlay-manager";
+  const STORE_NAME = "kv";
+  const DB_VERSION = 1;
+  function openDB() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME);
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+  function idbGet(db, key) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.get(key);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+  function idbSet(db, key, value) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.put(value, key);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+  function idbDelete(db, key) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.delete(key);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+  async function migrateFromLocalStorage(db, key) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw === null) return void 0;
+      const parsed = JSON.parse(raw);
+      await idbSet(db, key, parsed);
+      localStorage.removeItem(key);
+      return parsed;
+    } catch {
+      return void 0;
+    }
+  }
+  function createIDBStorage() {
+    const dbPromise = openDB();
+    return {
+      async getItem(key, initialValue) {
+        const db = await dbPromise;
+        const value = await idbGet(db, key);
+        if (value !== void 0) return value;
+        const migrated = await migrateFromLocalStorage(db, key);
+        if (migrated !== void 0) return migrated;
+        return initialValue;
+      },
+      async setItem(key, newValue) {
+        const db = await dbPromise;
+        await idbSet(db, key, newValue);
+      },
+      async removeItem(key) {
+        const db = await dbPromise;
+        await idbDelete(db, key);
+      }
+    };
+  }
+  const idbStorage = createIDBStorage();
+  const overlayAtom = atomWithStorage("overlays", [], idbStorage);
   const OverlayList = () => {
     const [overlays, setOverlays] = useAtom(overlayAtom);
     const toggleVisibility = (currentlyHidden, index) => {
@@ -16547,31 +16624,8 @@
     ["/edit/{name}", /* @__PURE__ */ React.createElement(Edit, null)],
     ["/edit/", /* @__PURE__ */ React.createElement(Edit, null)]
   ]);
-  function App() {
-    const [showOverlay, setShowOverlay] = useAtom(showOverlayAtom);
-    const setPosition = useSetAtom(positionAtom);
-    const [buttonPortal, setButtonPortal] = reactExports.useState(null);
+  function OverlayRenderer() {
     const overlays = useAtomValue(overlayAtom);
-    reactExports.useEffect(() => {
-      const handleData = (event) => {
-        const customEvent = event;
-        const location = customEvent.detail;
-        setPosition(location);
-      };
-      window.addEventListener("overlay-setPosition-data", handleData);
-      return () => window.removeEventListener("overlay-setPosition-data", handleData);
-    }, []);
-    reactExports.useEffect(() => {
-      const mutationObserver = new MutationObserver(() => {
-        awaitElement(
-          ".absolute.top-2.right-2.z-40 > .flex.flex-col.gap-4.items-center > .flex.flex-col.items-center.gap-3"
-        ).then((element) => {
-          setButtonPortal(element);
-        });
-      });
-      mutationObserver.observe(document.body, { childList: true, subtree: true });
-      return () => mutationObserver.disconnect();
-    }, []);
     reactExports.useEffect(() => {
       const handleRenderRequest = async (event) => {
         const customEvent = event;
@@ -16595,6 +16649,32 @@
       window.addEventListener("overlay-render-request", handleRenderRequest);
       return () => window.removeEventListener("overlay-render-request", handleRenderRequest);
     }, [overlays]);
+    return null;
+  }
+  function App() {
+    const [showOverlay, setShowOverlay] = useAtom(showOverlayAtom);
+    const setPosition = useSetAtom(positionAtom);
+    const [buttonPortal, setButtonPortal] = reactExports.useState(null);
+    reactExports.useEffect(() => {
+      const handleData = (event) => {
+        const customEvent = event;
+        const location = customEvent.detail;
+        setPosition(location);
+      };
+      window.addEventListener("overlay-setPosition-data", handleData);
+      return () => window.removeEventListener("overlay-setPosition-data", handleData);
+    }, []);
+    reactExports.useEffect(() => {
+      const mutationObserver = new MutationObserver(() => {
+        awaitElement(
+          ".absolute.top-2.right-2.z-40 > .flex.flex-col.gap-4.items-center > .flex.flex-col.items-center.gap-3"
+        ).then((element) => {
+          setButtonPortal(element);
+        });
+      });
+      mutationObserver.observe(document.body, { childList: true, subtree: true });
+      return () => mutationObserver.disconnect();
+    }, []);
     return /* @__PURE__ */ React.createElement(RouteProvider, { routes }, /* @__PURE__ */ React.createElement(
       o$3.Provider,
       {
@@ -16614,7 +16694,7 @@
           /* @__PURE__ */ React.createElement(e, null)
         ),
         buttonPortal ?? document.body
-      ), showOverlay && /* @__PURE__ */ React.createElement(Outlet, null))
+      ), /* @__PURE__ */ React.createElement(reactExports.Suspense, { fallback: null }, /* @__PURE__ */ React.createElement(OverlayRenderer, null), showOverlay && /* @__PURE__ */ React.createElement(Outlet, null)))
     ));
   }
   function fetchHook() {

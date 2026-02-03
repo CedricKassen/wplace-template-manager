@@ -1,4 +1,7 @@
 import { Overlay } from "../utils/types";
 import { atomWithStorage } from "jotai/utils";
+import { createIDBStorage } from "../utils/idbStorage";
 
-export const overlayAtom = atomWithStorage<Overlay[]>("overlays", []);
+const idbStorage = createIDBStorage<Overlay[]>();
+
+export const overlayAtom = atomWithStorage<Overlay[]>("overlays", [], idbStorage);

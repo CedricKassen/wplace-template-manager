@@ -1,5 +1,5 @@
 import { PixelLocation, TileRenderRequest, TileRenderResponse } from "./utils/types";
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { RouteProvider } from "./components/Router/RouteContext";
 import { Outlet } from "./components/Router/Outlet";
 import { Overview } from "./pages/Overview";
@@ -25,35 +25,8 @@ const routes = new Map([
     ["/edit/", <Edit />],
 ]);
 
-function App() {
-    const [showOverlay, setShowOverlay] = useAtom(showOverlayAtom);
-    const setPosition = useSetAtom(positionAtom);
-    const [buttonPortal, setButtonPortal] = useState<HTMLDivElement | null>(null);
+function OverlayRenderer() {
     const overlays = useAtomValue(overlayAtom);
-
-    useEffect(() => {
-        const handleData = (event: Event) => {
-            const customEvent = event as CustomEvent<PixelLocation>;
-            const location = customEvent.detail;
-            setPosition(location);
-        };
-
-        window.addEventListener("overlay-setPosition-data", handleData);
-        return () => window.removeEventListener("overlay-setPosition-data", handleData);
-    }, []);
-
-    useEffect(() => {
-        const mutationObserver = new MutationObserver(() => {
-            awaitElement(
-                ".absolute.top-2.right-2.z-40 > .flex.flex-col.gap-4.items-center > .flex.flex-col.items-center.gap-3",
-            ).then((element) => {
-                setButtonPortal(element as HTMLDivElement);
-            });
-        });
-
-        mutationObserver.observe(document.body, { childList: true, subtree: true });
-        return () => mutationObserver.disconnect();
-    }, []);
 
     useEffect(() => {
         const handleRenderRequest = async (event: Event) => {
@@ -82,6 +55,38 @@ function App() {
         return () => window.removeEventListener("overlay-render-request", handleRenderRequest);
     }, [overlays]);
 
+    return null;
+}
+
+function App() {
+    const [showOverlay, setShowOverlay] = useAtom(showOverlayAtom);
+    const setPosition = useSetAtom(positionAtom);
+    const [buttonPortal, setButtonPortal] = useState<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        const handleData = (event: Event) => {
+            const customEvent = event as CustomEvent<PixelLocation>;
+            const location = customEvent.detail;
+            setPosition(location);
+        };
+
+        window.addEventListener("overlay-setPosition-data", handleData);
+        return () => window.removeEventListener("overlay-setPosition-data", handleData);
+    }, []);
+
+    useEffect(() => {
+        const mutationObserver = new MutationObserver(() => {
+            awaitElement(
+                ".absolute.top-2.right-2.z-40 > .flex.flex-col.gap-4.items-center > .flex.flex-col.items-center.gap-3",
+            ).then((element) => {
+                setButtonPortal(element as HTMLDivElement);
+            });
+        });
+
+        mutationObserver.observe(document.body, { childList: true, subtree: true });
+        return () => mutationObserver.disconnect();
+    }, []);
+
     return (
         <RouteProvider routes={routes}>
             <IconContext.Provider
@@ -101,7 +106,10 @@ function App() {
                         </div>,
                         buttonPortal ?? document.body,
                     )}
-                    {showOverlay && <Outlet />}
+                    <Suspense fallback={null}>
+                        <OverlayRenderer />
+                        {showOverlay && <Outlet />}
+                    </Suspense>
                 </div>
             </IconContext.Provider>
         </RouteProvider>
