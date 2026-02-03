@@ -45,7 +45,7 @@ function App() {
     useEffect(() => {
         const mutationObserver = new MutationObserver(() => {
             awaitElement(
-                "div.absolute.right-2.top-2.z-30 > div.flex.flex-col.gap-4.items-center > div.flex.flex-col.items-center.gap-3",
+                ".absolute.top-2.right-2.z-40 > .flex.flex-col.gap-4.items-center > .flex.flex-col.items-center.gap-3",
             ).then((element) => {
                 setButtonPortal(element as HTMLDivElement);
             });
