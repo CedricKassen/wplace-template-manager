@@ -45,7 +45,7 @@ function App() {
     useEffect(() => {
         const mutationObserver = new MutationObserver(() => {
             awaitElement(
-                "div.absolute.right-2.top-2.z-30 > div.flex.flex-col.gap-4.items-center > div.flex.flex-col.items-center.gap-3",
+                "div.absolute.right-2 > div.items-center > div.items-center",
             ).then((element) => {
                 setButtonPortal(element as HTMLDivElement);
             });
@@ -94,7 +94,7 @@ function App() {
                 <div className="App">
                     {createPortal(
                         <div
-                            className={"btn btn-md shadow-md btn-circle"}
+                            className={"btn btn-square shadow-md"}
                             onClick={() => setShowOverlay(!showOverlay)}
                         >
                             <PaintBrushHouseholdIcon />
